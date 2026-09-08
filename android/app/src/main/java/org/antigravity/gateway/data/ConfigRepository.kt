@@ -1,5 +1,6 @@
 package org.antigravity.gateway.data
 
+import org.antigravity.gateway.util.NetworkUtils
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -46,6 +47,8 @@ class ConfigRepository(
             } else {
                 generateDownstreamKey()
             }
+            val rawPort = root.optInt("port", NetworkUtils.GATEWAY_PORT)
+            val port = if (rawPort in 1..65535) rawPort else NetworkUtils.GATEWAY_PORT
 
             val providersArray = root.optJSONArray("providers") ?: JSONArray()
             val providersList = mutableListOf<Provider>()
@@ -73,6 +76,7 @@ class ConfigRepository(
                 schemaVersion = version,
                 currentProviderId = finalCurrentId,
                 downstreamKey = downstreamKey,
+                port = port,
                 providers = providersList
             )
             inMemoryConfig = loadedConfig
@@ -102,6 +106,7 @@ class ConfigRepository(
             schemaVersion = CURRENT_SCHEMA_VERSION,
             currentProviderId = initialProvider.id,
             downstreamKey = generateDownstreamKey(),
+            port = NetworkUtils.GATEWAY_PORT,
             providers = listOf(initialProvider)
         )
     }
@@ -112,6 +117,7 @@ class ConfigRepository(
         root.put("schemaVersion", config.schemaVersion)
         root.put("currentProviderId", config.currentProviderId)
         root.put("downstreamKeyCiphertext", cryptoProvider.encrypt(config.downstreamKey))
+        root.put("port", config.port)
 
         val array = JSONArray()
         for (p in config.providers) {
@@ -126,7 +132,16 @@ class ConfigRepository(
 
         val tempFile = File(storageFile.parentFile, "${storageFile.name}.tmp")
         tempFile.writeText(root.toString(2), Charsets.UTF_8)
-        if (tempFile.exists()) {
+        try {
+            java.nio.file.Files.move(
+                tempFile.toPath(),
+                storageFile.toPath(),
+                java.nio.file.StandardCopyOption.REPLACE_EXISTING
+            )
+        } catch (_: Exception) {
+            if (storageFile.exists()) {
+                storageFile.delete()
+            }
             tempFile.renameTo(storageFile)
         }
         inMemoryConfig = config
@@ -211,6 +226,15 @@ class ConfigRepository(
             currentProviderId = newCurrentId,
             providers = updatedList
         )
+        save(updated)
+        return updated
+    }
+
+    @Synchronized
+    fun updatePort(port: Int): GatewayConfig {
+        val current = load()
+        val validPort = if (port in 1..65535) port else NetworkUtils.GATEWAY_PORT
+        val updated = current.copy(port = validPort)
         save(updated)
         return updated
     }

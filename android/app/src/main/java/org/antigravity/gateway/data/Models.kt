@@ -1,5 +1,6 @@
 package org.antigravity.gateway.data
 
+import org.antigravity.gateway.util.NetworkUtils
 import java.util.UUID
 
 data class Provider(
@@ -13,6 +14,7 @@ data class GatewayConfig(
     val schemaVersion: Int = 1,
     val currentProviderId: String,
     val downstreamKey: String,
+    val port: Int = NetworkUtils.GATEWAY_PORT,
     val providers: List<Provider>
 ) {
     fun getCurrentProvider(): Provider? {

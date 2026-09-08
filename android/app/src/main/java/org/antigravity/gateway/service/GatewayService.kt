@@ -148,13 +148,23 @@ class GatewayService : Service() {
                 } else {
                     GatewayBridge.stopGateway()
                     stopForeground(STOP_FOREGROUND_REMOVE)
-                    GatewayServiceController.updateState(GatewayState.ERROR, "启动失败: 服务就绪超时或端口被占用")
+                    val errMsg = if (!org.antigravity.gateway.util.NetworkUtils.isPortAvailable(port)) {
+                        "端口重复，请修改端口"
+                    } else {
+                        "启动失败: 服务就绪超时或端口被占用"
+                    }
+                    GatewayServiceController.updateState(GatewayState.ERROR, errMsg)
                     stopSelf()
                 }
             } else {
-                val err = result.exceptionOrNull()?.message ?: "未知错误"
+                val rawErr = result.exceptionOrNull()?.message ?: "未知错误"
+                val err = if (rawErr.contains("address already in use", ignoreCase = true) || rawErr.contains("bind", ignoreCase = true)) {
+                    "端口重复，请修改端口"
+                } else {
+                    "启动失败: $rawErr"
+                }
                 stopForeground(STOP_FOREGROUND_REMOVE)
-                GatewayServiceController.updateState(GatewayState.ERROR, "启动失败: $err")
+                GatewayServiceController.updateState(GatewayState.ERROR, err)
                 stopSelf()
             }
         }

@@ -191,6 +191,23 @@
                     android:textSize="11sp"
                     android:textColor="@color/text_secondary"
                     android:visibility="gone" />
+
+                <!-- Row 4: Port Input -->
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/tilGatewayPort"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:hint="@string/gateway_port_label"
+                    style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/etGatewayPort"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="number"
+                        android:singleLine="true" />
+                </com.google.android.material.textfield.TextInputLayout>
             </LinearLayout>
         </com.google.android.material.card.MaterialCardView>
 

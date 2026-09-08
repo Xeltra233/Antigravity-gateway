@@ -90,9 +90,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun loadConfigAndNetwork() {
         viewModelScope.launch(Dispatchers.IO) {
             val config = repository.load()
-            val appLink = NetworkUtils.buildAppLink()
+            val ip = NetworkUtils.getLocalIpAddress()
+            val appLink = NetworkUtils.buildAppLink(ip, config.port)
             _uiState.value = _uiState.value.copy(
                 config = config,
+                appLink = appLink
+            )
+        }
+    }
+
+    fun updatePort(port: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val updated = repository.updatePort(port)
+            val ip = NetworkUtils.getLocalIpAddress()
+            val appLink = NetworkUtils.buildAppLink(ip, updated.port)
+            _uiState.value = _uiState.value.copy(
+                config = updated,
                 appLink = appLink
             )
         }
@@ -162,6 +175,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val url = currentProvider?.upstreamUrl?.trim() ?: ""
         val key = currentProvider?.upstreamKey?.trim() ?: ""
         val downstream = _uiState.value.config.downstreamKey
+        val port = _uiState.value.config.port
 
         if (url.isEmpty()) {
             _uiState.value = _uiState.value.copy(statusMessage = "请输入上游 URL")
@@ -172,12 +186,27 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
+        if (port !in 1..65535) {
+            _uiState.value = _uiState.value.copy(statusMessage = "端口范围无效 (1-65535)")
+            return
+        }
+
+        // 启动检查端口：若端口被占用，拦截启动并简明指导修改端口
+        if (!NetworkUtils.isPortAvailable(port)) {
+            _uiState.value = _uiState.value.copy(
+                gatewayState = GatewayState.ERROR,
+                statusMessage = "端口重复，请修改端口",
+                testResult = "启动失败: 端口重复，请修改端口"
+            )
+            return
+        }
+
         GatewayServiceController.start(
             context = context,
             upstreamUrl = url,
             upstreamKey = key,
             downstreamKey = downstream,
-            port = NetworkUtils.GATEWAY_PORT
+            port = port
         )
     }
 
@@ -193,7 +222,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         _uiState.value = _uiState.value.copy(isTesting = true, testResult = "正在拉取上游模型列表...")
         viewModelScope.launch {
-            val result = GatewayTestClient.fetchModels(_uiState.value.config.downstreamKey)
+            val result = GatewayTestClient.fetchModels(
+                downstreamKey = _uiState.value.config.downstreamKey,
+                port = _uiState.value.config.port
+            )
             if (result.isSuccess) {
                 val models = result.getOrNull() ?: emptyList()
                 val text = if (models.isEmpty()) {
@@ -235,7 +267,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val result = GatewayTestClient.testChatMessage(
                 downstreamKey = _uiState.value.config.downstreamKey,
-                modelId = targetModel
+                modelId = targetModel,
+                port = _uiState.value.config.port
             )
             if (result.isSuccess) {
                 val reply = result.getOrNull() ?: ""

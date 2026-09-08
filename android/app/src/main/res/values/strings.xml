@@ -20,4 +20,7 @@
     <string name="notification_channel_name">网关后台运行</string>
     <string name="notification_channel_desc">保持网关在后台持续运行</string>
     <string name="notification_running_text">网关正在监听端口 38472</string>
+    <string name="gateway_port_label">监听端口 (默认: 38472)</string>
+    <string name="port_duplicate_hint">端口重复，请修改端口</string>
+    <string name="port_invalid_hint">端口范围无效 (1-65535)</string>
 </resources>

@@ -3,6 +3,7 @@ package org.antigravity.gateway.ui
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.text.Editable
@@ -43,6 +44,27 @@ class MainActivity : AppCompatActivity() {
 
         setupListeners()
         observeUiState()
+        handleIntent(intent)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleIntent(intent)
+    }
+
+    private fun handleIntent(intent: Intent?) {
+        val url = intent?.getStringExtra("set_upstream_url")
+        val key = intent?.getStringExtra("set_upstream_key")
+        val port = intent?.getIntExtra("set_port", -1) ?: -1
+        if (url != null || key != null) {
+            val current = viewModel.uiState.value.config.getCurrentProvider()
+            val finalUrl = url ?: current?.upstreamUrl ?: ""
+            val finalKey = key ?: current?.upstreamKey ?: ""
+            viewModel.updateDraft(finalUrl, finalKey)
+        }
+        if (port in 1..65535) {
+            viewModel.updatePort(port)
+        }
     }
 
     override fun onResume() {
@@ -81,6 +103,20 @@ class MainActivity : AppCompatActivity() {
         }
         binding.etUpstreamUrl.addTextChangedListener(textWatcher)
         binding.etUpstreamKey.addTextChangedListener(textWatcher)
+
+        // Gateway Port text watcher
+        binding.etGatewayPort.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                if (isInternalTextUpdating) return
+                val portStr = binding.etGatewayPort.text?.toString()?.trim() ?: ""
+                val port = portStr.toIntOrNull()
+                if (port != null && port in 1..65535) {
+                    viewModel.updatePort(port)
+                }
+            }
+        })
 
         // Downstream Key Generate & Copy
         binding.btnGenerateKey.setOnClickListener {
@@ -152,6 +188,19 @@ class MainActivity : AppCompatActivity() {
         val targetDownstream = state.config.downstreamKey
         if (binding.etDownstreamKey.text?.toString() != targetDownstream) {
             binding.etDownstreamKey.setText(targetDownstream)
+        }
+        val targetPort = state.config.port.toString()
+        if (binding.etGatewayPort.text?.toString() != targetPort && !binding.etGatewayPort.hasFocus()) {
+            binding.etGatewayPort.setText(targetPort)
+        }
+        val canEditPort = (state.gatewayState == GatewayState.IDLE || state.gatewayState == GatewayState.ERROR)
+        binding.etGatewayPort.isEnabled = canEditPort
+
+        if (state.statusMessage.contains("端口重复") || state.testResult.contains("端口重复")) {
+            binding.tilGatewayPort.error = getString(R.string.port_duplicate_hint)
+            binding.etGatewayPort.requestFocus()
+        } else {
+            binding.tilGatewayPort.error = null
         }
 
         // Auto populate test model input if empty and models fetched

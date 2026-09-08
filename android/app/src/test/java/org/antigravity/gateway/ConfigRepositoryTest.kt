@@ -135,6 +135,25 @@ class ConfigRepositoryTest {
     }
 
     @Test
+    fun testPortPersistenceAndValidation() {
+        val initial = repository.load()
+        assertEquals(38472, initial.port)
+
+        // Update to valid custom port
+        val updated = repository.updatePort(39123)
+        assertEquals(39123, updated.port)
+
+        // Create a new repo instance pointing to same file to verify persistence
+        val repo2 = ConfigRepository(configFile, cryptoProvider)
+        val reloaded = repo2.load()
+        assertEquals(39123, reloaded.port)
+
+        // Update to invalid port falls back to default 38472
+        val fallback = repository.updatePort(-5)
+        assertEquals(38472, fallback.port)
+    }
+
+    @Test
     fun testCorruptedFileRecovery() {
         configFile.writeText("{ corrupted_json !!!")
         val recovered = repository.load()
