@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark theme palette: keeps foreground/background contrast readable while preserving brand blue -->
+    <color name="accent">#26C6DA</color>
+    <color name="background">#121212</color>
+    <color name="surface">#1E1E1E</color>
+    <color name="text_primary">#ECECEC</color>
+    <color name="text_secondary">#A8A8A8</color>
+    <color name="link">#7EB6FF</color>
+    <color name="log_background">#0F1317</color>
+    <color name="success">#81C784</color>
+</resources>

@@ -11,13 +11,17 @@ import android.text.TextWatcher
 import android.text.method.ScrollingMovementMethod
 import android.view.LayoutInflater
 import android.view.View
+import android.view.ViewGroup
+import android.widget.BaseAdapter
 import android.widget.EditText
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.RadioButton
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
@@ -26,22 +30,33 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.launch
 import org.antigravity.gateway.R
+import org.antigravity.gateway.data.ThemeMode
+import org.antigravity.gateway.data.ThemePreferences
 import org.antigravity.gateway.databinding.ActivityMainBinding
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
+    private lateinit var themePreferences: ThemePreferences
     private val viewModel: MainViewModel by viewModels()
 
+    private data class ThemeOption(val mode: ThemeMode, val iconRes: Int, val labelRes: Int)
+
+    private val themeOptions = listOf(
+        ThemeOption(ThemeMode.LIGHT, R.drawable.ic_theme_light, R.string.theme_mode_light),
+        ThemeOption(ThemeMode.DARK, R.drawable.ic_theme_dark, R.string.theme_mode_dark),
+        ThemeOption(ThemeMode.SYSTEM, R.drawable.ic_theme_auto, R.string.theme_mode_system)
+    )
     private var isInternalTextUpdating = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        themePreferences = ThemePreferences(this)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
         binding.tvTestResult.movementMethod = ScrollingMovementMethod()
-
+        updateThemeButton()
         setupListeners()
         observeUiState()
         handleIntent(intent)
@@ -73,6 +88,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupListeners() {
+        // Theme mode switch (light / dark / follow-system chooser, top-right)
+        binding.btnThemeMode.setOnClickListener { showThemeDialog() }
+
         // Provider switcher & rename
         binding.layoutProviderSelect.setOnClickListener { showProviderDialog() }
         binding.btnSwitchProvider.setOnClickListener { showProviderDialog() }
@@ -260,6 +278,51 @@ class MainActivity : AppCompatActivity() {
         if (state.statusMessage.isNotEmpty()) {
             Toast.makeText(this, state.statusMessage, Toast.LENGTH_SHORT).show()
             viewModel.clearStatusMessage()
+        }
+    }
+
+    private fun showThemeDialog() {
+        val adapter = ThemeOptionAdapter()
+        val checkedIndex = themeOptions.indexOfFirst { it.mode == themePreferences.mode }.coerceAtLeast(0)
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.theme_switch_title)
+            .setSingleChoiceItems(adapter, checkedIndex) { dialog, which ->
+                applyThemeMode(themeOptions[which].mode)
+                dialog.dismiss()
+            }
+            .setNegativeButton(R.string.cancel, null)
+            .show()
+    }
+
+    private fun applyThemeMode(mode: ThemeMode) {
+        themePreferences.mode = mode
+        updateThemeButton(mode)
+        AppCompatDelegate.setDefaultNightMode(mode.delegateMode)
+    }
+
+    private fun updateThemeButton(mode: ThemeMode = themePreferences.mode) {
+        val option = themeOptions.firstOrNull { it.mode == mode } ?: themeOptions.last()
+        binding.btnThemeMode.setImageResource(option.iconRes)
+        binding.btnThemeMode.contentDescription =
+            getString(R.string.theme_switch_content_desc, getString(option.labelRes))
+    }
+
+    private inner class ThemeOptionAdapter : BaseAdapter() {
+        override fun getCount(): Int = themeOptions.size
+
+        override fun getItem(position: Int): ThemeOption = themeOptions[position]
+
+        override fun getItemId(position: Int): Long = position.toLong()
+
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+            val view = convertView
+                ?: LayoutInflater.from(parent.context).inflate(R.layout.dialog_theme_option, parent, false)
+            val option = themeOptions[position]
+            view.findViewById<ImageView>(R.id.ivThemeIcon).setImageResource(option.iconRes)
+            view.findViewById<TextView>(R.id.tvThemeLabel).setText(option.labelRes)
+            view.findViewById<ImageView>(R.id.ivThemeCheck).visibility =
+                if (option.mode == themePreferences.mode) View.VISIBLE else View.INVISIBLE
+            return view
         }
     }
 
