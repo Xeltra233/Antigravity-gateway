@@ -17,11 +17,18 @@ import java.util.Locale
  *
  * The report is written before the process dies and is surfaced from the status card, where the
  * user can copy it. Only the newest [MAX_REPORTS] files are kept; older ones are deleted.
+ *
+ * Two copies are attempted: the private `files/crash-logs` directory and the app-external one
+ * (`Android/data/<pkg>/files/crash-logs`), which a PC can open over USB without root even when
+ * the app itself cannot start any more.
  */
 object CrashReporter {
 
     const val DIR_NAME = "crash-logs"
     const val MAX_REPORTS = 5
+    private const val ATTEMPTS_FILE = "startup-attempts"
+    /** Launch attempts without a healthy UI before the app falls back to safe mode. */
+    const val SAFE_MODE_THRESHOLD = 3
     private const val FILE_PREFIX = "crash-"
     private const val FILE_SUFFIX = ".txt"
     private val FILE_NAME_PATTERN = Regex("^crash-(\\d{8}-\\d{6}-\\d{3})\\.txt$")
@@ -38,10 +45,7 @@ object CrashReporter {
         val previous = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             try {
-                val file = write(appContext, thread, throwable)
-                if (file != null) {
-                    Log.i(TAG, "crash report stored at ${file.absolutePath}")
-                } else {
+                if (write(appContext, thread, throwable) == null) {
                     Log.e(TAG, "crash storage unavailable; report not persisted")
                 }
             } catch (writeError: Throwable) {
@@ -54,19 +58,62 @@ object CrashReporter {
 
     /** Returns the file the report was written to, or null when storage is unavailable. */
     fun write(context: Context, thread: Thread, throwable: Throwable): File? {
-        val dir = directory(context) ?: return null
-        val file = File(dir, "$FILE_PREFIX${timestamp()}$FILE_SUFFIX")
+        val name = "$FILE_PREFIX${timestamp()}$FILE_SUFFIX"
         val body = CrashReportFormat.format(header(context, thread), throwable)
-        file.writeText(body, Charsets.UTF_8)
-        deleteOutdated(dir)
-        return file
+        var first: File? = null
+        val targets = directories(context)
+        for (dir in targets) {
+            val file = File(dir, name)
+            runCatching { file.writeText(body, Charsets.UTF_8) }
+                .onSuccess {
+                    if (first == null) first = file
+                    Log.i(TAG, "crash report stored at ${file.absolutePath}")
+                }
+                .onFailure { Log.e(TAG, "cannot write crash report to ${dir.absolutePath}", it) }
+            deleteOutdated(dir)
+        }
+        if (first == null) Log.e(TAG, "crash storage unavailable; report not persisted")
+        return first
     }
 
+    /** Every directory that can hold reports, internal first. */
+    fun directories(context: Context): List<File> = listOfNotNull(
+        privateDirectory(context),
+        externalDirectory(context)
+    )
+
+    /** Path a PC can read over USB (`Android/data/<pkg>/files/crash-logs`), or null when absent. */
+    fun externalDirectory(context: Context): File? {
+        val base = runCatching { context.getExternalFilesDir(null) }.getOrNull() ?: return null
+        val dir = File(base, DIR_NAME)
+        if (!dir.exists() && !dir.mkdirs()) return null
+        return dir.takeIf { it.isDirectory }
+    }
+
+    /** Paths offered to the user and to support: internal first, then the PC-readable copy. */
+    fun describe(context: Context): String = directories(context)
+        .joinToString("\n") { dir ->
+            val label = if (dir.absolutePath.contains("/emulated/0/")) "（可用电脑直接打开）" else "（应用内部）"
+            "${dir.absolutePath} $label"
+        }
+
     fun reports(context: Context): List<File> =
-        directory(context)?.listFiles()
-            ?.filter { it.name.let(FILE_NAME_PATTERN::matches) }
-            ?.sortedByDescending { it.name }
-            ?: emptyList()
+        directories(context)
+            .flatMap { dir -> dir.listFiles()?.toList().orEmpty() }
+            .filter { FILE_NAME_PATTERN.matches(it.name) }
+            .distinctBy { it.name }
+            .sortedByDescending { it.name }
+
+    /** Records this launch; a value >= [SAFE_MODE_THRESHOLD] means repeated startup failures. */
+    fun beginStartup(context: Context): Int = StartupAttempts.begin(File(context.filesDir, ATTEMPTS_FILE))
+
+    /** The dashboard is up, so the launch counter can be reset. */
+    fun markStartupHealthy(context: Context) {
+        StartupAttempts.reset(File(context.filesDir, ATTEMPTS_FILE))
+    }
+
+    fun consecutiveFailedStartups(context: Context): Int =
+        StartupAttempts.read(File(context.filesDir, ATTEMPTS_FILE))
 
     fun latest(context: Context): File? = reports(context).firstOrNull()
 
@@ -74,10 +121,13 @@ object CrashReporter {
         latest(context)?.let { runCatching { it.readText(Charsets.UTF_8) }.getOrNull() }
 
     fun clear(context: Context) {
-        reports(context).forEach { runCatching { it.delete() } }
+        directories(context).forEach { dir ->
+            dir.listFiles()?.filter { FILE_NAME_PATTERN.matches(it.name) }
+                ?.forEach { runCatching { it.delete() } }
+        }
     }
 
-    private fun directory(context: Context): File? {
+    private fun privateDirectory(context: Context): File? {
         val dir = File(context.filesDir, DIR_NAME)
         if (!dir.exists() && !dir.mkdirs()) return null
         return dir.takeIf { it.isDirectory }
@@ -113,6 +163,26 @@ object CrashReporter {
 }
 
 /** Pure formatting/rotation helpers, kept Android-free so they stay unit-testable on the JVM. */
+/**
+ * Launch-attempt bookkeeping kept next to the reports; a plain file is used instead of
+ * SharedPreferences so a corrupted preference file cannot itself break the guard.
+ */
+internal object StartupAttempts {
+
+    fun begin(file: File): Int {
+        val next = (read(file) + 1).coerceAtMost(99)
+        runCatching { file.writeText(next.toString(), Charsets.UTF_8) }
+        return next
+    }
+
+    fun reset(file: File) {
+        runCatching { file.writeText("0", Charsets.UTF_8) }
+    }
+
+    fun read(file: File): Int =
+        runCatching { file.readText(Charsets.UTF_8).trim().toInt() }.getOrDefault(0)
+}
+
 internal object CrashReportFormat {
 
     fun format(header: String, throwable: Throwable): String = buildString {

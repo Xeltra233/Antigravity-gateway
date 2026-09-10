@@ -31,6 +31,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.launch
+import org.antigravity.gateway.GatewayApplication
 import org.antigravity.gateway.R
 import org.antigravity.gateway.data.ThemeMode
 import org.antigravity.gateway.data.ThemePreferences
@@ -109,31 +110,44 @@ class MainActivity : AppCompatActivity() {
             updateCrashLogEntry()
             return
         }
-        val scroll = android.widget.ScrollView(this).apply {
-            val text = TextView(this@MainActivity).apply {
-                setText(report)
-                textSize = 11f
-                typeface = android.graphics.Typeface.MONOSPACE
-                setPadding(24, 24, 24, 24)
-                setTextIsSelectable(true)
-            }
-            addView(text)
-        }
-        MaterialAlertDialogBuilder(this)
+        val content = layoutInflater.inflate(R.layout.dialog_crash_log, null)
+        content.findViewById<TextView>(R.id.tvCrashReport).text = report
+        content.findViewById<TextView>(R.id.tvCrashLocation).text =
+            getString(R.string.crash_log_location, CrashReporter.describe(this))
+
+        val dialog = MaterialAlertDialogBuilder(this)
             .setTitle(R.string.crash_log_title)
-            .setView(scroll)
-            .setPositiveButton(R.string.crash_log_copy) { _, _ ->
-                val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                clipboard.setPrimaryClip(ClipData.newPlainText("crash-log", report))
-                Toast.makeText(this, R.string.crash_log_copied, Toast.LENGTH_SHORT).show()
-            }
-            .setNeutralButton(R.string.crash_log_clear) { _, _ ->
-                CrashReporter.clear(this)
-                updateCrashLogEntry()
-                Toast.makeText(this, R.string.crash_log_cleared, Toast.LENGTH_SHORT).show()
-            }
-            .setNegativeButton(R.string.crash_log_close, null)
-            .show()
+            .setView(content)
+            .setCancelable(true)
+            .create()
+        content.findViewById<View>(R.id.btnCrashClose).setOnClickListener { dialog.dismiss() }
+        content.findViewById<View>(R.id.btnCrashCopy).setOnClickListener {
+            copyToClipboard(report)
+            Toast.makeText(this, R.string.crash_log_copied, Toast.LENGTH_SHORT).show()
+        }
+        content.findViewById<View>(R.id.btnCrashShare).setOnClickListener { shareCrashReport(report) }
+        content.findViewById<View>(R.id.btnCrashClear).setOnClickListener {
+            CrashReporter.clear(this)
+            updateCrashLogEntry()
+            Toast.makeText(this, R.string.crash_log_cleared, Toast.LENGTH_SHORT).show()
+            dialog.dismiss()
+        }
+        dialog.show()
+    }
+
+    private fun copyToClipboard(text: String) {
+        val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        clipboard.setPrimaryClip(ClipData.newPlainText("crash-log", text))
+    }
+
+    /** Without root or a PC the user can still hand the report to support through any app. */
+    private fun shareCrashReport(report: String) {
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, getString(R.string.crash_log_title))
+            putExtra(Intent.EXTRA_TEXT, report)
+        }
+        runCatching { startActivity(Intent.createChooser(send, getString(R.string.crash_log_share))) }
     }
 
     /** Debug builds only: lets an adb launch crash on purpose to verify the recorder. */
@@ -146,9 +160,25 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        // The dashboard is usable, so the startup crash counter can be reset.
+        CrashReporter.markStartupHealthy(this)
+        if (GatewayApplication.safeMode) {
+            reportSafeMode()
+        }
         viewModel.loadConfigAndNetwork()
         updateCrashLogEntry()
     }
+
+    /** Explains why the app started without the optional initialisation after repeated crashes. */
+    private fun reportSafeMode() {
+        binding.tvSafeModeBanner.visibility = View.VISIBLE
+        binding.tvSafeModeBanner.text = getString(
+            R.string.crash_safe_mode_hint,
+            GatewayApplication.startupAttempts
+        )
+        binding.btnViewCrashLog.visibility = View.VISIBLE
+    }
+
     private fun setupListeners() {
         // Theme mode switch (light / dark / follow-system chooser, top-right)
         binding.btnThemeMode.setOnClickListener { showThemeDialog() }

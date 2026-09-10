@@ -38,4 +38,7 @@
     <string name="crash_log_copied">崩溃日志已复制</string>
     <string name="crash_log_cleared">崩溃日志已清除</string>
     <string name="crash_log_empty">没有崩溃日志</string>
+    <string name="crash_log_share">分享</string>
+    <string name="crash_log_location">日志文件位置（可直接拷贝给开发者）：\n%1$s</string>
+    <string name="crash_safe_mode_hint">安全模式：检测到连续 %1$d 次启动未成功，已跳过主题等可选初始化。请点下方按钮查看并分享崩溃日志。</string>
 </resources>

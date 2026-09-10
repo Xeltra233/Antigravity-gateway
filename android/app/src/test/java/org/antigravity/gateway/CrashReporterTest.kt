@@ -1,9 +1,11 @@
 package org.antigravity.gateway
 
 import org.antigravity.gateway.util.CrashReportFormat
+import org.antigravity.gateway.util.StartupAttempts
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 /**
  * Covers the Android-free parts of [org.antigravity.gateway.util.CrashReporter]: report formatting
@@ -56,5 +58,30 @@ class CrashReporterTest {
         val names = listOf("crash-20260910-180001-000.txt", "crash-20260910-180000-000.txt")
 
         assertEquals(listOf("crash-20260910-180000-000.txt"), CrashReportFormat.outdatedReports(names, keep = 1))
+    }
+
+    @Test
+    fun testStartupAttemptsCountUpAndReset() {
+        val file = File.createTempFile("startup-attempts", ".txt").apply { delete() }
+
+        assertEquals(1, StartupAttempts.begin(file))
+        assertEquals(2, StartupAttempts.begin(file))
+        assertEquals(3, StartupAttempts.begin(file))
+        assertTrue("third attempt reaches safe mode", StartupAttempts.read(file) >= 3)
+
+        StartupAttempts.reset(file)
+        assertEquals(0, StartupAttempts.read(file))
+        assertEquals(1, StartupAttempts.begin(file))
+    }
+
+    @Test
+    fun testStartupAttemptsTolerateMissingOrBrokenFile() {
+        val missing = File(System.getProperty("java.io.tmpdir"), "agw-missing-attempts-${System.nanoTime()}")
+        assertEquals(0, StartupAttempts.read(missing))
+
+        val broken = File.createTempFile("startup-broken", ".txt")
+        broken.writeText("not a number")
+        assertEquals(0, StartupAttempts.read(broken))
+        assertEquals(1, StartupAttempts.begin(broken))
     }
 }
