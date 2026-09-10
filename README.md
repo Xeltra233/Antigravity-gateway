@@ -179,7 +179,7 @@ cd Antigravity-gateway
 - **查看版本信息**:
   ```bash
   ./gateway -v
-  # 输出: Antigravity Gateway version 1.0.9 (commit: ..., built: ...)
+  # 输出: Antigravity Gateway version 1.0.10 (commit: ..., built: ...)
   ```
 
 - **跨平台交叉编译 (在一台机器上为其他系统编译)**:
@@ -439,8 +439,8 @@ curl -X POST http://127.0.0.1:8080/admin/keys/key_7f8a91b2c3d4/revoke \
 
 ### 🛡️ 运维监控与健康检查
 
-- **存活探针 (Liveness)**: `GET /healthz` → 返回 `{"status":"ok","version":"1.0.9"}` (200 OK)
-- **就绪探针 (Readiness)**: `GET /readyz` → 返回 `{"status":"ready","version":"1.0.9"}` (200 OK)
+- **存活探针 (Liveness)**: `GET /healthz` → 返回 `{"status":"ok","version":"1.0.10"}` (200 OK)
+- **就绪探针 (Readiness)**: `GET /readyz` → 返回 `{"status":"ready","version":"1.0.10"}` (200 OK)
 - **Prometheus 监控指标**: `GET /metrics` → 输出请求总量、活跃请求数、过载拒绝、合成包装命中/修复/重试/冲突等指标。
 - **紧急回滚**: 若遇到突发未知上游格式异常，修改 `.env` 中的 `WRAPPER_MODE=off` 并重启网关，即可切换为原生纯透传模式。
 
@@ -781,8 +781,8 @@ The gateway is 100% compliant with standard OpenAI `/v1` endpoints.
 
 ### 🛡️ Health Checks & Observability
 
-- **Liveness Probe**: `GET /healthz` → returns `{"status":"ok","version":"1.0.9"}` (200 OK)
-- **Readiness Probe**: `GET /readyz` → returns `{"status":"ready","version":"1.0.9"}` (200 OK)
+- **Liveness Probe**: `GET /healthz` → returns `{"status":"ok","version":"1.0.10"}` (200 OK)
+- **Readiness Probe**: `GET /readyz` → returns `{"status":"ready","version":"1.0.10"}` (200 OK)
 - **Prometheus Metrics**: `GET /metrics` → exports standard metrics including request totals, latencies, active connections, and synthetic wrapper counts.
 - **Emergency Fallback**: Set `WRAPPER_MODE=off` in `.env` and restart the gateway to revert to transparent raw passthrough.
 
