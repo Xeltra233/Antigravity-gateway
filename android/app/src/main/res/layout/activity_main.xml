@@ -430,6 +430,18 @@
                         android:textSize="12sp"
                         android:textColor="@color/text_primary"
                         android:scrollbars="vertical" />
+
+                    <!-- Shown only after a crash so users can copy the stack trace back to us -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnViewCrashLog"
+                        style="@style/Widget.MaterialComponents.Button.TextButton"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="end"
+                        android:layout_marginTop="4dp"
+                        android:textColor="@color/link"
+                        android:visibility="gone"
+                        tools:text="查看崩溃日志 (1)" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 

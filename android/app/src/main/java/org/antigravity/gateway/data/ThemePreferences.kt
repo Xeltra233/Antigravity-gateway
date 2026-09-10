@@ -27,9 +27,11 @@ class ThemePreferences(context: Context) {
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
     var mode: ThemeMode
-        get() = ThemeMode.fromStoredValue(prefs.getString(KEY_THEME_MODE, null))
+        // OEM backup/restore can leave a mismatched value type behind; fall back to SYSTEM.
+        get() = runCatching { ThemeMode.fromStoredValue(prefs.getString(KEY_THEME_MODE, null)) }
+            .getOrDefault(ThemeMode.SYSTEM)
         set(value) {
-            prefs.edit().putString(KEY_THEME_MODE, value.storedValue).apply()
+            runCatching { prefs.edit().putString(KEY_THEME_MODE, value.storedValue).apply() }
         }
 
     companion object {

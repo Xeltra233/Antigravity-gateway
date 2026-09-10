@@ -4,8 +4,10 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.net.Uri
 import android.os.Bundle
+import android.util.Log
 import android.text.Editable
 import android.text.TextWatcher
 import android.text.method.ScrollingMovementMethod
@@ -33,9 +35,14 @@ import org.antigravity.gateway.R
 import org.antigravity.gateway.data.ThemeMode
 import org.antigravity.gateway.data.ThemePreferences
 import org.antigravity.gateway.databinding.ActivityMainBinding
+import org.antigravity.gateway.util.CrashReporter
 
 class MainActivity : AppCompatActivity() {
 
+    companion object {
+        /** Debug-only intent extra used by the crash-recorder self test. */
+        const val EXTRA_TEST_CRASH = "agw_test_crash"
+    }
     private lateinit var binding: ActivityMainBinding
     private lateinit var themePreferences: ThemePreferences
     private val viewModel: MainViewModel by viewModels()
@@ -56,10 +63,13 @@ class MainActivity : AppCompatActivity() {
         setContentView(binding.root)
 
         binding.tvTestResult.movementMethod = ScrollingMovementMethod()
+        binding.btnViewCrashLog.setOnClickListener { showCrashLogDialog() }
         updateThemeButton()
         setupListeners()
         observeUiState()
+        updateCrashLogEntry()
         handleIntent(intent)
+        maybeTriggerTestCrash()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -82,11 +92,63 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** Shows the crash entry point only when a report is actually stored. */
+    private fun updateCrashLogEntry() {
+        val count = CrashReporter.reports(this).size
+        Log.i("CrashReporter", "stored crash reports: $count")
+        binding.btnViewCrashLog.visibility = if (count > 0) View.VISIBLE else View.GONE
+        if (count > 0) {
+            binding.btnViewCrashLog.text = getString(R.string.crash_log_button, count)
+        }
+    }
+
+    private fun showCrashLogDialog() {
+        val report = CrashReporter.readLatest(this)
+        if (report == null) {
+            Toast.makeText(this, R.string.crash_log_empty, Toast.LENGTH_SHORT).show()
+            updateCrashLogEntry()
+            return
+        }
+        val scroll = android.widget.ScrollView(this).apply {
+            val text = TextView(this@MainActivity).apply {
+                setText(report)
+                textSize = 11f
+                typeface = android.graphics.Typeface.MONOSPACE
+                setPadding(24, 24, 24, 24)
+                setTextIsSelectable(true)
+            }
+            addView(text)
+        }
+        MaterialAlertDialogBuilder(this)
+            .setTitle(R.string.crash_log_title)
+            .setView(scroll)
+            .setPositiveButton(R.string.crash_log_copy) { _, _ ->
+                val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                clipboard.setPrimaryClip(ClipData.newPlainText("crash-log", report))
+                Toast.makeText(this, R.string.crash_log_copied, Toast.LENGTH_SHORT).show()
+            }
+            .setNeutralButton(R.string.crash_log_clear) { _, _ ->
+                CrashReporter.clear(this)
+                updateCrashLogEntry()
+                Toast.makeText(this, R.string.crash_log_cleared, Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton(R.string.crash_log_close, null)
+            .show()
+    }
+
+    /** Debug builds only: lets an adb launch crash on purpose to verify the recorder. */
+    private fun maybeTriggerTestCrash() {
+        val debuggable = (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        if (debuggable && intent.getBooleanExtra(EXTRA_TEST_CRASH, false)) {
+            throw RuntimeException("CrashReporter self-test (debug build)")
+        }
+    }
+
     override fun onResume() {
         super.onResume()
         viewModel.loadConfigAndNetwork()
+        updateCrashLogEntry()
     }
-
     private fun setupListeners() {
         // Theme mode switch (light / dark / follow-system chooser, top-right)
         binding.btnThemeMode.setOnClickListener { showThemeDialog() }

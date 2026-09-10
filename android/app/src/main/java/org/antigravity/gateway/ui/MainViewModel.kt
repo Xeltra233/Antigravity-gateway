@@ -89,13 +89,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun loadConfigAndNetwork() {
         viewModelScope.launch(Dispatchers.IO) {
-            val config = repository.load()
-            val ip = NetworkUtils.getLocalIpAddress()
-            val appLink = NetworkUtils.buildAppLink(ip, config.port)
-            _uiState.value = _uiState.value.copy(
-                config = config,
-                appLink = appLink
-            )
+            // A failure here must never kill the process: surface it in the status area instead.
+            runCatching {
+                val config = repository.load()
+                val ip = NetworkUtils.getLocalIpAddress()
+                val appLink = NetworkUtils.buildAppLink(ip, config.port)
+                _uiState.value = _uiState.value.copy(
+                    config = config,
+                    appLink = appLink
+                )
+            }.onFailure { error ->
+                _uiState.value = _uiState.value.copy(
+                    statusMessage = "读取本地配置失败：${error.message ?: error.javaClass.simpleName}"
+                )
+            }
+            reportPersistenceFailure()
         }
     }
 
@@ -108,6 +116,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 config = updated,
                 appLink = appLink
             )
+            reportPersistenceFailure()
         }
     }
 
@@ -115,6 +124,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             val updated = repository.updateCurrentProviderDraft(url, key)
             _uiState.value = _uiState.value.copy(config = updated)
+            reportPersistenceFailure()
         }
     }
 
@@ -127,7 +137,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val updated = repository.selectProvider(providerId)
             _uiState.value = _uiState.value.copy(
                 config = updated,
-                statusMessage = "已切换至: ${updated.getCurrentProvider()?.name}"
+                statusMessage = statusOrPersistenceWarning("已切换至: ${updated.getCurrentProvider()?.name}")
             )
         }
     }
@@ -137,7 +147,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val (updated, newProvider) = repository.createProvider(name)
             _uiState.value = _uiState.value.copy(
                 config = updated,
-                statusMessage = "已创建并切换至: ${newProvider.name}"
+                statusMessage = statusOrPersistenceWarning("已创建并切换至: ${newProvider.name}")
             )
         }
     }
@@ -147,14 +157,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (trimmed.isEmpty()) return
         viewModelScope.launch(Dispatchers.IO) {
             val updated = repository.renameProvider(providerId, trimmed)
-            _uiState.value = _uiState.value.copy(config = updated, statusMessage = "已重命名为: $trimmed")
+            _uiState.value = _uiState.value.copy(config = updated, statusMessage = statusOrPersistenceWarning("已重命名为: $trimmed"))
         }
     }
 
     fun deleteProvider(providerId: String) {
         viewModelScope.launch(Dispatchers.IO) {
             val updated = repository.deleteProvider(providerId)
-            _uiState.value = _uiState.value.copy(config = updated, statusMessage = "已删除供应商")
+            _uiState.value = _uiState.value.copy(config = updated, statusMessage = statusOrPersistenceWarning("已删除供应商"))
         }
     }
 
@@ -165,9 +175,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.value = _uiState.value.copy(
                 config = updated,
                 keyNeedsRestart = isRunning,
-                statusMessage = if (isRunning) "下游 Key 已更新（重启网关后生效）" else "已生成新的下游 Key"
+                statusMessage = statusOrPersistenceWarning(if (isRunning) "下游 Key 已更新（重启网关后生效）" else "已生成新的下游 Key")
             )
         }
+    }
+
+    /** Prefers the default status message but replaces it when the last write could not persist. */
+    private fun statusOrPersistenceWarning(default: String): String {
+        val error = repository.lastSaveError ?: return default
+        return persistenceWarning(error)
+    }
+
+    /** Shown when a device-side Keystore/file failure kept a change from being stored. */
+    private fun reportPersistenceFailure() {
+        val error = repository.lastSaveError ?: return
+        _uiState.value = _uiState.value.copy(statusMessage = persistenceWarning(error))
+    }
+
+    private fun persistenceWarning(error: Throwable): String {
+        val reason = error.message?.take(80) ?: error.javaClass.simpleName
+        return "配置未能保存：$reason（改动仅本次运行有效）"
     }
 
     fun startGateway(context: Context) {

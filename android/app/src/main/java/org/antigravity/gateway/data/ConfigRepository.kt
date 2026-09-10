@@ -13,6 +13,10 @@ class ConfigRepository(
 ) {
     private var inMemoryConfig: GatewayConfig? = null
 
+    /** Set when a save could not be persisted (for example a device Keystore failure). */
+    @Volatile
+    var lastSaveError: Throwable? = null
+        private set
     companion object {
         const val CURRENT_SCHEMA_VERSION = 1
         const val DEFAULT_CONFIG_FILE_NAME = "gateway_config.json"
@@ -112,39 +116,49 @@ class ConfigRepository(
     }
 
     @Synchronized
-    fun save(config: GatewayConfig) {
-        val root = JSONObject()
-        root.put("schemaVersion", config.schemaVersion)
-        root.put("currentProviderId", config.currentProviderId)
-        root.put("downstreamKeyCiphertext", cryptoProvider.encrypt(config.downstreamKey))
-        root.put("port", config.port)
+    fun save(config: GatewayConfig): Boolean {
+        // Encryption depends on the device Keystore, which can fail on some OEM ROMs. Keep the
+        // change usable in memory instead of taking the process down.
+        return try {
+            val root = JSONObject()
+            root.put("schemaVersion", config.schemaVersion)
+            root.put("currentProviderId", config.currentProviderId)
+            root.put("downstreamKeyCiphertext", cryptoProvider.encrypt(config.downstreamKey))
+            root.put("port", config.port)
 
-        val array = JSONArray()
-        for (p in config.providers) {
-            val pObj = JSONObject()
-            pObj.put("id", p.id)
-            pObj.put("name", p.name)
-            pObj.put("upstreamUrl", p.upstreamUrl.trim())
-            pObj.put("upstreamKeyCiphertext", cryptoProvider.encrypt(p.upstreamKey))
-            array.put(pObj)
-        }
-        root.put("providers", array)
-
-        val tempFile = File(storageFile.parentFile, "${storageFile.name}.tmp")
-        tempFile.writeText(root.toString(2), Charsets.UTF_8)
-        try {
-            java.nio.file.Files.move(
-                tempFile.toPath(),
-                storageFile.toPath(),
-                java.nio.file.StandardCopyOption.REPLACE_EXISTING
-            )
-        } catch (_: Exception) {
-            if (storageFile.exists()) {
-                storageFile.delete()
+            val array = JSONArray()
+            for (p in config.providers) {
+                val pObj = JSONObject()
+                pObj.put("id", p.id)
+                pObj.put("name", p.name)
+                pObj.put("upstreamUrl", p.upstreamUrl.trim())
+                pObj.put("upstreamKeyCiphertext", cryptoProvider.encrypt(p.upstreamKey))
+                array.put(pObj)
             }
-            tempFile.renameTo(storageFile)
+            root.put("providers", array)
+
+            val tempFile = File(storageFile.parentFile, "${storageFile.name}.tmp")
+            tempFile.writeText(root.toString(2), Charsets.UTF_8)
+            try {
+                java.nio.file.Files.move(
+                    tempFile.toPath(),
+                    storageFile.toPath(),
+                    java.nio.file.StandardCopyOption.REPLACE_EXISTING
+                )
+            } catch (_: Exception) {
+                if (storageFile.exists()) {
+                    storageFile.delete()
+                }
+                tempFile.renameTo(storageFile)
+            }
+            inMemoryConfig = config
+            lastSaveError = null
+            true
+        } catch (e: Exception) {
+            inMemoryConfig = config
+            lastSaveError = e
+            false
         }
-        inMemoryConfig = config
     }
 
     @Synchronized

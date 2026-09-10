@@ -1,6 +1,7 @@
 package org.antigravity.gateway
 
 import org.antigravity.gateway.data.ConfigRepository
+import org.antigravity.gateway.data.CryptoProvider
 import org.antigravity.gateway.data.JvmSoftwareCryptoProvider
 import org.junit.After
 import org.junit.Assert.*
@@ -160,5 +161,29 @@ class ConfigRepositoryTest {
         assertNotNull(recovered)
         assertEquals(1, recovered.providers.size)
         assertTrue(recovered.downstreamKey.startsWith("sk-agw-"))
+    }
+
+    @Test
+    fun testKeystoreFailureDoesNotThrowAndKeepsConfigUsable() {
+        // Devices with a broken/blocked Keystore must not crash: the config stays usable in memory.
+        val failing = ConfigRepository(configFile, ThrowingCryptoProvider())
+
+        val config = failing.load()
+        assertEquals(1, config.providers.size)
+        assertNotNull("save failure should be recorded", failing.lastSaveError)
+        assertFalse(failing.save(config))
+        assertFalse("no partial file should be left behind", configFile.exists())
+
+        val updated = failing.updatePort(39005)
+        assertEquals(39005, updated.port)
+        assertNotNull("still failing to persist, but never throwing", failing.lastSaveError)
+    }
+
+    private class ThrowingCryptoProvider : CryptoProvider {
+        override fun encrypt(plainText: String): String =
+            throw IllegalStateException("keystore unavailable")
+
+        override fun decrypt(cipherText: String): String =
+            throw IllegalStateException("keystore unavailable")
     }
 }
