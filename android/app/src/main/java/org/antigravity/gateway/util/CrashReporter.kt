@@ -1,9 +1,16 @@
 package org.antigravity.gateway.util
 
+import android.content.ContentResolver
+import android.content.ContentUris
+import android.content.ContentValues
 import android.content.Context
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Environment
+import android.provider.MediaStore
 import android.util.Log
 import android.os.Build
+import androidx.annotation.RequiresApi
 import java.io.File
 import java.io.PrintWriter
 import java.io.StringWriter
@@ -18,13 +25,17 @@ import java.util.Locale
  * The report is written before the process dies and is surfaced from the status card, where the
  * user can copy it. Only the newest [MAX_REPORTS] files are kept; older ones are deleted.
  *
- * Two copies are attempted: the private `files/crash-logs` directory and the app-external one
- * (`Android/data/<pkg>/files/crash-logs`), which a PC can open over USB without root even when
- * the app itself cannot start any more.
+ * Copies are attempted in three places: the private `files/crash-logs` directory, the app-external
+ * one (`Android/data/<pkg>/files/crash-logs`, still browsable up to Android 10) and - on Android
+ * 11+, where `Android/data` became unreadable - the public `Downloads/[PUBLIC_DIR_NAME]` folder,
+ * which the built-in file manager and chat apps can open.
  */
 object CrashReporter {
 
     const val DIR_NAME = "crash-logs"
+
+    /** Folder inside the public Downloads directory, used from Android 11 on. */
+    const val PUBLIC_DIR_NAME = "AntigravityGateway"
     const val MAX_REPORTS = 5
     private const val ATTEMPTS_FILE = "startup-attempts"
     /** Launch attempts without a healthy UI before the app falls back to safe mode. */
@@ -73,7 +84,63 @@ object CrashReporter {
             deleteOutdated(dir)
         }
         if (first == null) Log.e(TAG, "crash storage unavailable; report not persisted")
+        exportToPublicDownloads(context, name, body)?.let { Log.i(TAG, "crash report exported to $it") }
         return first
+    }
+
+    /**
+     * True when the report can also be dropped in the public Downloads folder. Android 11 locked
+     * down `Android/data` for file managers and MTP, so the private/app-external copies alone are
+     * not reachable for a normal user any more.
+     */
+    fun publicExportEnabled(sdkInt: Int): Boolean = sdkInt >= Build.VERSION_CODES.Q
+
+    /** User-visible path of the exported copy, e.g. `下载/AntigravityGateway/crash-...txt`. */
+    fun publicExportPath(name: String): String = "下载/$PUBLIC_DIR_NAME/$name"
+
+    private fun exportToPublicDownloads(context: Context, name: String, body: String): String? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        return runCatching { exportViaMediaStore(context, name, body) }
+            .onFailure { Log.e(TAG, "cannot export crash report to Downloads", it) }
+            .getOrNull()
+    }
+
+    @RequiresApi(Build.VERSION_CODES.Q)
+    private fun exportViaMediaStore(context: Context, name: String, body: String): String? {
+        val resolver = context.contentResolver
+        val collection = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+        val values = ContentValues().apply {
+            put(MediaStore.Downloads.DISPLAY_NAME, name)
+            put(MediaStore.Downloads.MIME_TYPE, "text/plain")
+            put(MediaStore.Downloads.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/$PUBLIC_DIR_NAME")
+            put(MediaStore.Downloads.IS_PENDING, 1)
+        }
+        val uri = resolver.insert(collection, values) ?: return null
+        resolver.openOutputStream(uri)?.use { it.write(body.toByteArray(Charsets.UTF_8)) } ?: return null
+        resolver.update(uri, ContentValues().apply { put(MediaStore.Downloads.IS_PENDING, 0) }, null, null)
+        deleteOutdatedExports(resolver, collection)
+        return publicExportPath(name)
+    }
+
+    @RequiresApi(Build.VERSION_CODES.Q)
+    private fun deleteOutdatedExports(resolver: ContentResolver, collection: Uri) {
+        val projection = arrayOf(MediaStore.Downloads._ID, MediaStore.Downloads.DISPLAY_NAME)
+        val entries = mutableListOf<Pair<Long, String>>()
+        runCatching {
+            resolver.query(
+                collection,
+                projection,
+                "${MediaStore.Downloads.DISPLAY_NAME} LIKE ?",
+                arrayOf("$FILE_PREFIX%"),
+                null
+            )?.use { cursor ->
+                while (cursor.moveToNext()) entries += cursor.getLong(0) to (cursor.getString(1) ?: "")
+            }
+        }.onFailure { Log.e(TAG, "cannot list exported crash reports", it) }
+        entries.filter { FILE_NAME_PATTERN.matches(it.second) }
+            .sortedByDescending { it.second }
+            .drop(MAX_REPORTS)
+            .forEach { (id, _) -> runCatching { resolver.delete(ContentUris.withAppendedId(collection, id), null, null) } }
     }
 
     /** Every directory that can hold reports, internal first. */
@@ -90,12 +157,16 @@ object CrashReporter {
         return dir.takeIf { it.isDirectory }
     }
 
-    /** Paths offered to the user and to support: internal first, then the PC-readable copy. */
-    fun describe(context: Context): String = directories(context)
-        .joinToString("\n") { dir ->
-            val label = if (dir.absolutePath.contains("/emulated/0/")) "（可用电脑直接打开）" else "（应用内部）"
-            "${dir.absolutePath} $label"
+    /** User-facing locations, most accessible first. */
+    fun describe(context: Context): String = buildList {
+        if (publicExportEnabled(Build.VERSION.SDK_INT)) {
+            add("下载/${PUBLIC_DIR_NAME}（文件管理器可直接打开）")
         }
+        directories(context).forEach { dir ->
+            val label = if (dir.absolutePath.contains("/emulated/0/")) "（电脑 USB/adb 可读）" else "（应用私有）"
+            add("${dir.absolutePath} $label")
+        }
+    }.joinToString("\n")
 
     fun reports(context: Context): List<File> =
         directories(context)
@@ -125,6 +196,19 @@ object CrashReporter {
             dir.listFiles()?.filter { FILE_NAME_PATTERN.matches(it.name) }
                 ?.forEach { runCatching { it.delete() } }
         }
+        clearExports(context)
+    }
+
+    private fun clearExports(context: Context) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
+        runCatching {
+            val collection = MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+            context.contentResolver.delete(
+                collection,
+                "${MediaStore.Downloads.DISPLAY_NAME} LIKE ?",
+                arrayOf("$FILE_PREFIX%")
+            )
+        }.onFailure { Log.e(TAG, "cannot clear exported crash reports", it) }
     }
 
     private fun privateDirectory(context: Context): File? {
@@ -162,7 +246,6 @@ object CrashReporter {
     }.getOrDefault("unknown")
 }
 
-/** Pure formatting/rotation helpers, kept Android-free so they stay unit-testable on the JVM. */
 /**
  * Launch-attempt bookkeeping kept next to the reports; a plain file is used instead of
  * SharedPreferences so a corrupted preference file cannot itself break the guard.
@@ -183,6 +266,7 @@ internal object StartupAttempts {
         runCatching { file.readText(Charsets.UTF_8).trim().toInt() }.getOrDefault(0)
 }
 
+/** Pure formatting/rotation helpers, kept Android-free so they stay unit-testable on the JVM. */
 internal object CrashReportFormat {
 
     fun format(header: String, throwable: Throwable): String = buildString {

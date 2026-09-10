@@ -1,8 +1,10 @@
 package org.antigravity.gateway
 
+import org.antigravity.gateway.util.CrashReporter
 import org.antigravity.gateway.util.CrashReportFormat
 import org.antigravity.gateway.util.StartupAttempts
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -83,5 +85,21 @@ class CrashReporterTest {
         broken.writeText("not a number")
         assertEquals(0, StartupAttempts.read(broken))
         assertEquals(1, StartupAttempts.begin(broken))
+    }
+
+    @Test
+    fun testPublicExportOnlyFromAndroid10Q() {
+        assertFalse("api 26 has no scoped Downloads access", CrashReporter.publicExportEnabled(26))
+        assertFalse("api 28 (Android 9) still uses Android/data", CrashReporter.publicExportEnabled(28))
+        assertTrue("api 29 (Android 10) can write through MediaStore", CrashReporter.publicExportEnabled(29))
+        assertTrue("api 34", CrashReporter.publicExportEnabled(34))
+    }
+
+    @Test
+    fun testPublicExportPathIsUserVisible() {
+        val path = CrashReporter.publicExportPath("crash-20260910-190708-938.txt")
+
+        assertTrue("lives in the public download folder", path.startsWith("下载/AntigravityGateway/"))
+        assertTrue(path.endsWith("crash-20260910-190708-938.txt"))
     }
 }
