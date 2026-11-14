@@ -25,6 +25,7 @@ test_out.txt
 
 # Goal artifacts & temporary test files
 goal-*
+AGENTS.md
 test_bin.exe
 icon_source.jpg
 
