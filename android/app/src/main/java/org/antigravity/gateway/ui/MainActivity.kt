@@ -4,6 +4,10 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.graphics.drawable.LayerDrawable
+import android.graphics.drawable.RippleDrawable
+import android.content.res.ColorStateList
+import android.graphics.Color
 import android.content.pm.ApplicationInfo
 import android.net.Uri
 import android.os.Bundle
@@ -14,6 +18,7 @@ import android.text.method.ScrollingMovementMethod
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.widget.BaseAdapter
 import android.widget.EditText
 import android.widget.ImageView
@@ -23,18 +28,21 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatDelegate
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.textfield.TextInputLayout
+import kotlin.math.roundToInt
 import androidx.lifecycle.repeatOnLifecycle
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.card.MaterialCardView
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.launch
 import org.antigravity.gateway.GatewayApplication
 import org.antigravity.gateway.R
-import org.antigravity.gateway.data.ThemeMode
-import org.antigravity.gateway.data.ThemePreferences
+import org.antigravity.gateway.data.Skin
+import org.antigravity.gateway.data.SkinPreferences
 import org.antigravity.gateway.databinding.ActivityMainBinding
 import org.antigravity.gateway.util.CrashReporter
 
@@ -43,30 +51,54 @@ class MainActivity : AppCompatActivity() {
     companion object {
         /** Debug-only intent extra used by the crash-recorder self test. */
         const val EXTRA_TEST_CRASH = "agw_test_crash"
+
+        /** Heaviest weight the platform font picker will resolve; the sketch skin leans on it. */
+        private const val HEAVY_WEIGHT = 900
+
+        /** Holds the sketch stroke back until the window's enter animation has finished. */
+        private const val REVEAL_HOLD_MS = 280L
+
+        /** Ink bleed under glyphs. */
+        private const val BLEED_RADIUS = 0.45f
+        private const val BLEED_DX = 0.2f
+        private const val BLEED_DY = 0.2f
+
+        private const val SECONDARY_STROKE_DP = 1.0f
+        private const val SECONDARY_CORNER_DP = 8f
+
+        private const val GLASS_CARD_RADIUS_DP = 18f
+        private const val GLASS_FIELD_RADIUS_DP = 14f
+        private const val GLASS_FIELD_STROKE_DP = 1f
+        private const val GLASS_FIELD_STROKE = 0x24FFFFFF
+        private const val GLASS_RIPPLE = 0x33FFFFFF
+
+        /** Press feedback tinted with the sketch ink instead of the skin primary. */
+        private const val SKETCH_RIPPLE = 0x333E4450
+        /** Field rule weight, matching the card outline so frames and dividers read as one pen. */
+        private const val SKETCH_FIELD_STROKE_DP = 1.0f
+        private const val SKETCH_INK = SketchSpec.INK
+
+        /** Page colour behind the cards in the sketch skin. */
+        private const val SKETCH_PAGE = SketchSpec.PAPER
     }
     private lateinit var binding: ActivityMainBinding
-    private lateinit var themePreferences: ThemePreferences
+    private lateinit var skinPreferences: SkinPreferences
+    private var stylePopup: StyleMenuPopup? = null
     private val viewModel: MainViewModel by viewModels()
 
-    private data class ThemeOption(val mode: ThemeMode, val iconRes: Int, val labelRes: Int)
-
-    private val themeOptions = listOf(
-        ThemeOption(ThemeMode.LIGHT, R.drawable.ic_theme_light, R.string.theme_mode_light),
-        ThemeOption(ThemeMode.DARK, R.drawable.ic_theme_dark, R.string.theme_mode_dark),
-        ThemeOption(ThemeMode.SYSTEM, R.drawable.ic_theme_auto, R.string.theme_mode_system)
-    )
     private var isInternalTextUpdating = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        skinPreferences = SkinPreferences(this)
+        setTheme(skinPreferences.skin.themeRes)
         super.onCreate(savedInstanceState)
-        themePreferences = ThemePreferences(this)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
         binding.tvTestResult.movementMethod = ScrollingMovementMethod()
         binding.btnViewCrashLog.setOnClickListener { showCrashLogDialog() }
-        updateThemeButton()
         setupListeners()
+        applySketchSurface()
         observeUiState()
         updateCrashLogEntry()
         handleIntent(intent)
@@ -167,6 +199,17 @@ class MainActivity : AppCompatActivity() {
         }
         viewModel.loadConfigAndNetwork()
         updateCrashLogEntry()
+        // The silk skin is the only one backed by a live GL surface; it starts and stops with the
+        // activity so the backdrop never animates behind a locked screen.
+        if (skinPreferences.skin == Skin.SILK) {
+            binding.silkBackdrop.startBackdrop()
+            applySilkSurface()
+        }
+    }
+
+    override fun onPause() {
+        binding.silkBackdrop.stopBackdrop()
+        super.onPause()
     }
 
     /** Explains why the app started without the optional initialisation after repeated crashes. */
@@ -180,10 +223,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupListeners() {
-        // Theme mode switch (light / dark / follow-system chooser, top-right)
-        binding.btnThemeMode.setOnClickListener { showThemeDialog() }
+        // Skin toggle: the control rolls into a single bar and the picker hangs below it.
+        binding.btnStyle.onToggle = { open ->
+            if (open) showStyleMenu() else stylePopup?.dismiss()
+        }
 
-        // Guard and model-report settings (top-right, next to the theme switch)
+        // Guard and model-report settings (top-right, next to the skin toggle)
         binding.btnSettings.setOnClickListener {
             GuardSettingsSheet(this) { guard ->
                 viewModel.updateGuardSettings(guard)
@@ -339,7 +384,7 @@ class MainActivity : AppCompatActivity() {
             GatewayState.IDLE -> {
                 binding.btnStartStop.isEnabled = true
                 binding.btnStartStop.text = getString(R.string.start_gateway)
-                binding.btnStartStop.setBackgroundColor(ContextCompat.getColor(this, R.color.primary))
+                paintStartButton(com.google.android.material.R.attr.colorPrimary)
                 binding.btnFetchModels.isEnabled = false
                 binding.btnTestMessage.isEnabled = false
             }
@@ -352,7 +397,7 @@ class MainActivity : AppCompatActivity() {
             GatewayState.RUNNING -> {
                 binding.btnStartStop.isEnabled = true
                 binding.btnStartStop.text = getString(R.string.stop_gateway)
-                binding.btnStartStop.setBackgroundColor(ContextCompat.getColor(this, R.color.error))
+                paintStartButton(com.google.android.material.R.attr.colorError)
                 binding.btnFetchModels.isEnabled = !state.isTesting
                 binding.btnTestMessage.isEnabled = !state.isTesting
             }
@@ -365,7 +410,7 @@ class MainActivity : AppCompatActivity() {
             GatewayState.ERROR -> {
                 binding.btnStartStop.isEnabled = true
                 binding.btnStartStop.text = "重试启动"
-                binding.btnStartStop.setBackgroundColor(ContextCompat.getColor(this, R.color.primary))
+                paintStartButton(com.google.android.material.R.attr.colorPrimary)
                 binding.btnFetchModels.isEnabled = false
                 binding.btnTestMessage.isEnabled = false
             }
@@ -382,49 +427,219 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun showThemeDialog() {
-        val adapter = ThemeOptionAdapter()
-        val checkedIndex = themeOptions.indexOfFirst { it.mode == themePreferences.mode }.coerceAtLeast(0)
-        MaterialAlertDialogBuilder(this)
-            .setTitle(R.string.theme_switch_title)
-            .setSingleChoiceItems(adapter, checkedIndex) { dialog, which ->
-                applyThemeMode(themeOptions[which].mode)
-                dialog.dismiss()
+    /**
+     * Replaces the flat card surfaces with the hand-drawn paper card, and thickens the headline
+     * text so the sketch skin reads as ink on paper rather than a recoloured Material layout.
+     * Only runs for the sketch skin; every other skin keeps the stock surfaces.
+     */
+    private var sketchRevealPlayed = false
+
+    private fun applySketchSurface() {
+        if (skinPreferences.skin != Skin.SKETCH) return
+        val density = resources.displayMetrics.density
+        val headlinePx = 16f * resources.displayMetrics.scaledDensity
+        val bodyPx = 13.5f * resources.displayMetrics.scaledDensity
+        // The page gets its own grain: cards are lighter than the sheet, and a flat backdrop makes
+        // the paper read as a tinted rectangle.
+        binding.root.background = PaperSurfaceDrawable(density, SKETCH_PAGE)
+        decorate(binding.root, density, headlinePx, bodyPx)
+        scheduleSketchReveal()
+    }
+
+    /**
+     * Draws the outline on starting from the first frame that is actually on screen.
+     *
+     * A Drawable learns its bounds during layout, and the window gets focus before it is composited,
+     * so both of those fire while the app is still a black rectangle: the stroke would be most of the
+     * way round by the time anything was visible. The pre-draw hook is the last point before the first
+     * frame is rasterised, so percent zero lands in that frame.
+     */
+    private fun scheduleSketchReveal() {
+        if (sketchRevealPlayed) return
+        // Registration has to wait for a message-loop turn: during onCreate the root is not attached
+        // yet, and the observer handed out then is torn down and replaced before anything is drawn.
+        binding.root.post {
+            if (sketchRevealPlayed || isFinishing) return@post
+            val observer = binding.root.viewTreeObserver
+            if (!observer.isAlive) {
+                startSketchReveal()
+                return@post
             }
-            .setNegativeButton(R.string.cancel, null)
-            .show()
-    }
-
-    private fun applyThemeMode(mode: ThemeMode) {
-        themePreferences.mode = mode
-        updateThemeButton(mode)
-        AppCompatDelegate.setDefaultNightMode(mode.delegateMode)
-    }
-
-    private fun updateThemeButton(mode: ThemeMode = themePreferences.mode) {
-        val option = themeOptions.firstOrNull { it.mode == mode } ?: themeOptions.last()
-        binding.btnThemeMode.setImageResource(option.iconRes)
-        binding.btnThemeMode.contentDescription =
-            getString(R.string.theme_switch_content_desc, getString(option.labelRes))
-    }
-
-    private inner class ThemeOptionAdapter : BaseAdapter() {
-        override fun getCount(): Int = themeOptions.size
-
-        override fun getItem(position: Int): ThemeOption = themeOptions[position]
-
-        override fun getItemId(position: Int): Long = position.toLong()
-
-        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
-            val view = convertView
-                ?: LayoutInflater.from(parent.context).inflate(R.layout.dialog_theme_option, parent, false)
-            val option = themeOptions[position]
-            view.findViewById<ImageView>(R.id.ivThemeIcon).setImageResource(option.iconRes)
-            view.findViewById<TextView>(R.id.tvThemeLabel).setText(option.labelRes)
-            view.findViewById<ImageView>(R.id.ivThemeCheck).visibility =
-                if (option.mode == themePreferences.mode) View.VISIBLE else View.INVISIBLE
-            return view
+            observer.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
+                override fun onPreDraw(): Boolean {
+                    val current = binding.root.viewTreeObserver
+                    if (current.isAlive) current.removeOnPreDrawListener(this)
+                    startSketchReveal()
+                    return true
+                }
+            })
         }
+    }
+
+    private fun startSketchReveal() {
+        if (sketchRevealPlayed) return
+        if (skinPreferences.skin != Skin.SKETCH) return
+        sketchRevealPlayed = true
+        // The first frame is rasterised behind the window's enter animation, so the opening stretch
+        // of the stroke would land while the app is still fading in. Holding it back past that fade
+        // is what makes the pen stroke a thing the user sees rather than a thing that already
+        // happened.
+        binding.root.postDelayed({ revealSketchStrokes(binding.root) }, REVEAL_HOLD_MS)
+    }
+
+    private fun revealSketchStrokes(view: View) {
+        sketchCardOf(view)?.restartReveal()
+        if (view is ViewGroup) {
+            for (index in 0 until view.childCount) revealSketchStrokes(view.getChildAt(index))
+        }
+    }
+
+    /**
+     * Finds a sketch card behind whatever wrapper the framework put on the view.
+     *
+     * The card is not always the background itself: a clickable view wraps it in a ripple, and a
+     * ripple with no content layer reports zero layers, so indexing layer 0 is not safe.
+     */
+    private fun sketchCardOf(view: View): SketchCardDrawable? {
+        val background = view.background ?: return null
+        if (background is SketchCardDrawable) return background
+        if (background is LayerDrawable) {
+            for (index in 0 until background.numberOfLayers) {
+                val layer = background.getDrawable(index)
+                if (layer is SketchCardDrawable) return layer
+            }
+        }
+        return null
+    }
+
+    /**
+     * Replaces the flat translucent panels with the frosted ones. The web build gets this from
+     * `backdrop-filter`; here the panel is rebuilt from the same gradient stack, so the two builds
+     * have to be compared on the drawn result rather than on the CSS.
+     */
+    private fun applySilkSurface() {
+        val density = resources.displayMetrics.density
+        decorateSilk(binding.root, density)
+    }
+
+    private fun decorateSilk(view: View, density: Float) {
+        when (view) {
+            is MaterialCardView -> {
+                view.setCardBackgroundColor(Color.TRANSPARENT)
+                view.cardElevation = 0f
+                view.background = GlassSurfaceDrawable(density, GLASS_CARD_RADIUS_DP, GlassSurfaceDrawable.Variant.CARD)
+            }
+            is TextInputLayout -> {
+                val radius = GLASS_FIELD_RADIUS_DP * density
+                view.boxBackgroundColor = Color.TRANSPARENT
+                view.setBoxCornerRadii(radius, radius, radius, radius)
+                view.boxStrokeWidth = (GLASS_FIELD_STROKE_DP * density).roundToInt().coerceAtLeast(1)
+                view.boxStrokeWidthFocused = ((GLASS_FIELD_STROKE_DP + 0.6f) * density).roundToInt().coerceAtLeast(1)
+                view.boxStrokeColor = GLASS_FIELD_STROKE
+                view.setBoxBackgroundMode(TextInputLayout.BOX_BACKGROUND_OUTLINE)
+            }
+            is MaterialButton -> {
+                // The primary action and the text-only button keep their own treatment.
+                if (view.id == R.id.btnStartStop || view.id == R.id.btnViewCrashLog) return
+                view.backgroundTintList = null
+                view.background = GlassSurfaceDrawable(density, GLASS_FIELD_RADIUS_DP, GlassSurfaceDrawable.Variant.FIELD)
+                view.setTextColor(Color.WHITE)
+                view.strokeWidth = 0
+            }
+        }
+        if (view is ViewGroup) {
+            for (index in 0 until view.childCount) decorateSilk(view.getChildAt(index), density)
+        }
+    }
+
+    private fun decorate(view: View, density: Float, headlinePx: Float, bodyPx: Float) {
+        when (view) {
+            is MaterialCardView -> {
+                view.setCardBackgroundColor(Color.TRANSPARENT)
+                view.cardElevation = 0f
+                view.background = SketchCardDrawable(density)
+            }
+            is TextInputLayout -> {
+                // Same pen as the card outline: the rounded width matters, because a 1px rule of ink
+                // is smeared by anti-aliasing until it reads lighter than the card border it sits in.
+                val stroke = (SKETCH_FIELD_STROKE_DP * density).roundToInt().coerceAtLeast(2)
+                val corner = 8f * density
+                view.setBoxCornerRadii(corner, corner, corner, corner)
+                view.boxStrokeWidth = stroke
+                view.boxStrokeWidthFocused = stroke
+                view.boxStrokeColor = SketchSpec.INK_SUB
+            }
+            is TextView -> {
+                if (view.textSize >= headlinePx) {
+                    view.setTypeface(android.graphics.Typeface.create(view.typeface, HEAVY_WEIGHT, false))
+                    view.setTextColor(SketchSpec.TEXT)
+                } else if (view.textSize >= bodyPx) {
+                    view.setTextColor(SketchSpec.TEXT)
+                } else {
+                    // Labels and captions sit back from the body; on paper they are lighter graphite,
+                    // not a smaller font.
+                    view.setTextColor(SketchSpec.TEXT_SUB)
+                }
+                // Ink spreads a hair on paper; a sub-pixel shadow is what stops the type from looking
+                // like it was printed on top of the sheet.
+                view.setShadowLayer(BLEED_RADIUS * density, BLEED_DX * density, BLEED_DY * density, SketchSpec.TEXT_BLEED)
+            }
+            is MaterialButton -> {
+                // Secondary buttons keep a drawn edge instead of the stock Material stroke.
+                view.strokeWidth = (SECONDARY_STROKE_DP * density).roundToInt()
+                view.strokeColor = ColorStateList.valueOf(SketchSpec.INK_SUB)
+                view.cornerRadius = (SECONDARY_CORNER_DP * density).roundToInt()
+                view.setTextColor(SketchSpec.TEXT)
+            }
+        }
+        if (view is ViewGroup) {
+            for (index in 0 until view.childCount) decorate(view.getChildAt(index), density, headlinePx, bodyPx)
+        }
+    }
+
+    /**
+     * Colours the primary action button. The sketch skin replaces the flat fill with the crayon slab,
+     * and every state change routes through here so the hand-drawn surface is not lost when the label
+     * and colour flip between start and stop.
+     */
+    private fun paintStartButton(colorAttr: Int) {
+        val button = binding.btnStartStop
+        if (skinPreferences.skin == Skin.SKETCH) {
+            button.backgroundTintList = null
+            val slab = SketchButtonDrawable(resources.displayMetrics.density)
+            button.background = RippleDrawable(ColorStateList.valueOf(SKETCH_RIPPLE), slab, null)
+        } else if (skinPreferences.skin == Skin.SILK) {
+            button.backgroundTintList = null
+            val glass = GlassSurfaceDrawable(resources.displayMetrics.density, GLASS_CARD_RADIUS_DP, GlassSurfaceDrawable.Variant.PRIMARY)
+            button.background = RippleDrawable(ColorStateList.valueOf(GLASS_RIPPLE), glass, null)
+            button.setTextColor(Color.WHITE)
+        } else {
+            button.backgroundTintList = null
+            button.setBackgroundColor(themeColor(colorAttr))
+        }
+    }
+
+    /** Resolves a theme attribute so dynamic colors follow the active skin. */
+    private fun themeColor(attr: Int): Int {
+        val value = android.util.TypedValue()
+        if (!theme.resolveAttribute(attr, value, true)) return 0
+        return if (value.resourceId != 0) ContextCompat.getColor(this, value.resourceId) else value.data
+    }
+
+    private fun showStyleMenu() {
+        if (stylePopup?.isShowing == true) return
+        val popup = StyleMenuPopup(binding.btnStyle, skinPreferences.skin) { skin ->
+            if (skin != skinPreferences.skin) {
+                skinPreferences.skin = skin
+                recreate()
+            }
+        }
+        popup.setOnDismissListener {
+            stylePopup = null
+            binding.btnStyle.setOpen(false)
+        }
+        stylePopup = popup
+        popup.show()
     }
 
     private fun showProviderDialog() {

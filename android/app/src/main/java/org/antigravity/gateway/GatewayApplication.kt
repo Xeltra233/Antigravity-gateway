@@ -2,14 +2,13 @@ package org.antigravity.gateway
 
 import android.app.Application
 import android.util.Log
-import androidx.appcompat.app.AppCompatDelegate
-import org.antigravity.gateway.data.ThemePreferences
+import org.antigravity.gateway.data.SkinPreferences
 import org.antigravity.gateway.util.CrashReporter
 
 /**
- * Applies the persisted theme mode before any Activity is created so cold starts render with the
- * correct day/night resources, and installs the crash recorder so launch failures on OEM ROMs
- * leave a readable stack trace behind.
+ * Installs the crash recorder so launch failures on OEM ROMs leave a readable stack trace behind.
+ * The skin itself is applied per Activity, because each skin is a separate fixed theme rather than
+ * a system night-mode toggle.
  */
 class GatewayApplication : Application() {
 
@@ -25,10 +24,9 @@ class GatewayApplication : Application() {
             Log.w(TAG, "safe mode: $startupAttempts startup attempts without a healthy UI")
             return
         }
-        // Never let a preference/theme failure take the whole process down at startup.
-        runCatching {
-            AppCompatDelegate.setDefaultNightMode(ThemePreferences(this).mode.delegateMode)
-        }
+        // Touch the stored skin once at startup so a corrupted preference is replaced by the
+        // default instead of surfacing later during Activity creation.
+        runCatching { SkinPreferences(this).skin }
     }
 
     companion object {

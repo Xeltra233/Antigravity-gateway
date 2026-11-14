@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Skin-scoped colors that Material does not expose as semantic attributes. -->
+    <attr name="agwLink" format="color" />
+    <attr name="agwLogBg" format="color" />
+    <attr name="agwSuccess" format="color" />
+    <attr name="agwCardBorder" format="color" />
+    <attr name="agwTopBar" format="color" />
+    <!-- Field rule inside cards; the sketch skin matches it to the card outline weight. -->
+    <attr name="agwFieldStroke" format="color" />
+    <attr name="agwFieldStrokeWidth" format="dimension" />
+    <attr name="agwFieldStrokeWidthFocused" format="dimension" />
+</resources>

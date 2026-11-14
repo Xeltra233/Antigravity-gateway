@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=420,initial-scale=1">
+<title>AGW · 主题预览</title>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0;height:100%}
+  body{
+    background:#e9eaee;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;
+  }
+
+  /* ================= 手机框 ================= */
+  .phone{
+    position:relative;width:420px;height:932px;margin:0 auto;
+    overflow:hidden;background:var(--bg);color:var(--ink);
+    display:flex;flex-direction:column;
+  }
+  #bg{position:absolute;inset:0;width:100%;height:100%;display:none;z-index:0}
+  .topbar,.body,.tabs{position:relative;z-index:1}
+
+  /* ================= 三套皮肤变量 ================= */
+  body[data-t="mnd"]{
+    --bg:#0f1013; --ink:#eceef3; --muted:#a8aeb9; --faint:#7d838e;
+    --line:#23252b; --accent:#2fcfae;
+    --card-bg:transparent; --card-bd:0px solid transparent; --card-r:0px;
+    --card-sh:none; --pad:4px 2px; --row-h:56px;
+    --sec:#9aa0aa; --sec-w:400; --label-w:400; --val-w:400; --title-w:700;
+    --primary-bg:#eceef3; --primary-fg:#111216; --primary-r:28px; --primary-h:56px;
+    --ghost:#3fd4b4; --tab-bg:rgba(15,16,19,.94); --tab-on:#eceef3; --tab-off:#7d838e;
+  }
+  body[data-t="min"]{
+    --bg:#fbfbfc; --ink:#17181c; --muted:#767d87; --faint:#8b9199;
+    --line:#eceef1; --accent:#2bb89a;
+    --card-bg:transparent; --card-bd:0px solid transparent; --card-r:0px;
+    --card-sh:none; --pad:4px 2px; --row-h:56px;
+    --sec:#868d97; --sec-w:400; --label-w:400; --val-w:400; --title-w:700;
+    --primary-bg:#17181c; --primary-fg:#fff; --primary-r:28px; --primary-h:56px;
+    --ghost:#2b8f7c; --tab-bg:rgba(251,251,252,.94); --tab-on:#17181c; --tab-off:#868d97;
+  }
+  body[data-t="skc"]{
+    --bg:#f7f1de; --ink:#3a4150; --muted:#6f7787; --faint:#8d8578;
+    --line:rgba(58,65,80,.30); --accent:#7dbf45;
+    --card-bg:#f4edda; --card-bd:2.6px solid var(--ink); --card-r:11px;
+    --card-sh:1.4px 1.4px 0 rgba(58,65,80,.2); --pad:19px 18px; --row-h:63px;
+    --sec:#434b5a; --sec-w:900; --label-w:900; --val-w:800; --title-w:900;
+    --primary-bg:#a8c6ee; --primary-fg:#232a36; --primary-r:14px; --primary-h:57px;
+    --ghost:#3f5c86; --tab-bg:#f2ebd8; --tab-on:#3a4150; --tab-off:#8d8578;
+  }
+  body[data-t="acr"]{
+    --bg:#04060b; --ink:#eef2fa; --muted:#a6b2c9; --faint:#7d8ba5;
+    --line:rgba(255,255,255,.10); --accent:#7aa2ff;
+    --card-bg:rgba(150,175,225,.11); --card-bd:1px solid rgba(255,255,255,.13);
+    --card-r:18px; --card-sh:0 18px 42px rgba(0,0,0,.42); --pad:16px 16px; --row-h:60px;
+    --sec:#a6b2c9; --sec-w:600; --label-w:600; --val-w:600; --title-w:700;
+    --primary-bg:rgba(150,175,225,.16); --primary-fg:#eef2fa; --primary-r:16px; --primary-h:54px;
+    --ghost:#9db9ff; --tab-bg:rgba(9,14,26,.62); --tab-on:#eef2fa; --tab-off:#7286a6;
+  }
+  body[data-t="acr"] #bg{display:block}
+  body[data-t="acr"] .card,body[data-t="acr"] .tabs{
+    backdrop-filter:blur(16px) saturate(120%);
+    -webkit-backdrop-filter:blur(16px) saturate(120%);
+  }
+
+  /* ================= 顶栏 ================= */
+  .topbar{display:flex;align-items:center;gap:6px;height:54px;padding:0 14px;flex:none}
+  .topbar .title{flex:1;text-align:center;font-size:19px;font-weight:var(--title-w);letter-spacing:.4px}
+  body[data-t="skc"] .topbar .title{font-size:22px;letter-spacing:.9px;-webkit-text-stroke:.7px currentColor}
+  body[data-t="min"] .topbar .title,body[data-t="mnd"] .topbar .title{font-size:22px}
+  .ico-btn{
+    width:36px;height:36px;flex:none;border:0;background:none;padding:0;
+    display:grid;place-items:center;cursor:pointer;color:var(--ink);opacity:.85;
+  }
+  .ico-btn svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+
+  /* ================= 页面容器 ================= */
+  .body{flex:1;overflow-y:auto;overflow-x:hidden;padding:2px 16px 16px}
+  .body::-webkit-scrollbar{width:0}
+  .page{display:none}
+  .page.on{display:block}
+
+  /* ================= 卡片 ================= */
+  .card{
+    position:relative;background:var(--card-bg);
+    border:var(--card-bd);border-radius:var(--card-r);
+    box-shadow:var(--card-sh);padding:var(--pad);margin:0 0 14px;
+  }
+  body[data-t="skc"] .card::before{
+    content:'';position:absolute;inset:0;border-radius:inherit;
+    border:2.6px solid var(--ink);pointer-events:none;filter:url(#rough);
+  }
+  body[data-t="skc"] .card{border-color:transparent;box-shadow:none}
+  body[data-t="skc"] .card:not(.list){padding:19px 18px}
+
+  /* ================= 状态卡 ================= */
+  .status{display:flex;align-items:center;gap:14px;margin:6px 0 16px;padding:4px 2px}
+  .dot{width:24px;height:24px;flex:none;display:grid;place-items:center}
+  .dot::before{content:'';width:24px;height:24px;border-radius:50%;
+    background:var(--dot-color,var(--accent));
+    box-shadow:0 0 0 9.5px color-mix(in srgb, var(--dot-color,var(--accent)) 16%, transparent);
+    transform:scale(.42);
+    transition:transform .32s cubic-bezier(.3,.9,.4,1),
+               background .25s ease, box-shadow .25s ease}
+  body[data-t="skc"] .dot::before{transform:scale(1);box-shadow:none;
+    filter:url(#rough);
+    background:radial-gradient(circle at 36% 30%,
+      color-mix(in srgb, var(--dot-color,#82c94a) 62%, #fff) 0%,
+      var(--dot-color,#82c94a) 54%,
+      color-mix(in srgb, var(--dot-color,#82c94a) 76%, #000) 100%)}
+  .status .st{flex:1;min-width:0}
+  .status .t{font-size:19px;font-weight:var(--title-w);letter-spacing:.2px}
+  .status .s{margin-top:4px;font-size:12.5px;color:var(--muted);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  /* ================= 开关 ================= */
+  .sw{position:relative;flex:none;width:52px;height:27px;border:0;border-radius:14px;
+    padding:0;background:var(--accent);cursor:pointer}
+  .sw i{position:absolute;top:3px;left:3px;width:21px;height:21px;border-radius:50%;
+    background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.22);
+    transition:transform .2s cubic-bezier(.3,.8,.4,1)}
+  .sw.on i{transform:translateX(25px)}
+  .sw.off{background:color-mix(in srgb, var(--muted) 42%, transparent)}
+  .sw.off i{transform:translateX(0)}
+  body[data-t="skc"] .sw{width:64px;height:34px;border-radius:17px;
+    background:linear-gradient(160deg,#9dc0ec,#7ea8dd)}
+  body[data-t="skc"] .sw::before{content:'';position:absolute;inset:0;border-radius:inherit;
+    border:2.5px solid var(--ink);filter:url(#rough)}
+  body[data-t="skc"] .sw i{width:26px;height:26px;top:3.5px;left:3.5px}
+  body[data-t="skc"] .sw.on i{transform:translateX(28px)}
+
+  /* ================= 分组标题 ================= */
+  .sec{font-size:14px;font-weight:var(--sec-w);color:var(--sec);
+    letter-spacing:.4px;margin:18px 0 9px 4px}
+  body[data-t="min"] .sec,body[data-t="mnd"] .sec{margin:22px 0 10px 2px}
+  body[data-t="skc"] .sec{font-size:16px;letter-spacing:.7px;margin:18px 0 11px 6px;
+    -webkit-text-stroke:.45px currentColor}
+  body[data-t="acr"] .sec{font-size:12.5px;letter-spacing:.6px;margin:20px 0 10px 4px}
+
+  /* ================= 列表行 ================= */
+  .list{padding:0}
+  body[data-t="skc"] .list{padding:4px 0 9px}
+  .row{display:flex;align-items:center;gap:12px;height:var(--row-h);
+    padding:0 16px;position:relative;cursor:pointer}
+  body[data-t="min"] .row,body[data-t="mnd"] .row{padding:0 2px}
+  body[data-t="skc"] .row{padding:0 18px}
+  .row + .row::before{content:'';position:absolute;top:0;left:16px;right:16px;
+    height:1px;background:var(--line)}
+  body[data-t="min"] .row + .row::before,body[data-t="mnd"] .row + .row::before{left:2px;right:2px}
+  body[data-t="skc"] .row + .row::before{left:18px;right:18px;
+    background:rgba(58,65,80,.62);filter:url(#roughFine)}
+  .row .k{font-size:15.5px;font-weight:var(--label-w);letter-spacing:.2px;flex:none}
+  body[data-t="skc"] .row .k{font-size:16.5px;-webkit-text-stroke:.6px currentColor}
+  .row .v{margin-left:auto;font-size:15.5px;font-weight:var(--val-w);
+    letter-spacing:.1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:58%}
+  body[data-t="skc"] .row .v{font-size:16.5px;-webkit-text-stroke:.5px currentColor}
+  .row .v.sm{font-size:13px;color:var(--muted)}
+  body[data-t="acr"] .row .v.sm{color:#c2cfe8}
+  .row .chev{width:16px;height:16px;flex:none;opacity:.9;fill:none;
+    stroke:var(--faint);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  body[data-t="skc"] .row .chev{stroke:var(--ink);stroke-width:2.2;
+    filter:url(#roughFine);width:17px;height:17px}
+  .row.sel{gap:11px}
+  .pick{width:20px;height:20px;flex:none;border-radius:50%;
+    border:1.8px solid var(--faint);display:grid;place-items:center;
+    transition:border-color .16s}
+  .pick::after{content:'';width:10px;height:10px;border-radius:50%;
+    background:var(--accent);transform:scale(0);
+    transition:transform .16s cubic-bezier(.3,.8,.4,1)}
+  .row.sel.on .pick{border-color:var(--accent)}
+  .row.sel.on .pick::after{transform:scale(1)}
+  .row.sel.on .k{font-weight:700}
+  body[data-t="skc"] .pick{width:22px;height:22px;border:2.4px solid var(--ink);
+    filter:url(#roughFine)}
+  body[data-t="skc"] .row.sel.on .pick{border-color:var(--ink)}
+  body[data-t="skc"] .row.sel.on .pick::after{background:#7dbf45}
+
+  /* ================= 供应商条目 ================= */
+  .cfglist{padding-top:6px}
+  .cfg{position:relative;display:flex;align-items:center;gap:10px;
+    padding:14px 14px 14px 16px;margin-bottom:10px;cursor:pointer;
+    border:1px solid var(--line);border-radius:14px;background:var(--card-bg);
+    transition:border-color .16s, background .16s}
+  .cfgb{flex:1;min-width:0}
+  .cfgn{font-size:15.5px;font-weight:600;letter-spacing:.2px}
+  .cfgs{margin-top:4px;font-size:12px;color:var(--muted);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cfgr{flex:none;display:flex;align-items:center;gap:4px}
+  .cur{display:none;font-size:11px;font-weight:600;letter-spacing:.2px;
+    color:var(--accent);padding:3px 7px;border-radius:7px;
+    background:color-mix(in srgb, var(--accent) 15%, transparent)}
+  .cfg.on{border-color:var(--accent)}
+  .cfg.on .cfgn{font-weight:700}
+  .cfg.on .cur{display:inline-block}
+  .cfg.on::before{content:'';position:absolute;left:0;top:16px;bottom:16px;
+    width:3px;border-radius:0 3px 3px 0;background:var(--accent)}
+  .more{width:28px;height:28px;border:0;background:none;cursor:pointer;
+    color:var(--faint);font-size:17px;line-height:1;padding:0;letter-spacing:-1px}
+  .menu{position:absolute;right:10px;top:52px;z-index:6;min-width:136px;
+    padding:6px;border-radius:11px;background:var(--menu-bg,#fff);
+    border:1px solid var(--line);box-shadow:0 12px 28px rgba(0,0,0,.16);display:none}
+  .menu.on{display:block}
+  .menu button{display:block;width:100%;text-align:left;border:0;background:none;
+    padding:9px 10px;font-size:14px;color:var(--ink);cursor:pointer;border-radius:7px}
+  .menu button:hover{background:color-mix(in srgb, var(--ink) 6%, transparent)}
+  .menu button.danger{color:#e0575b}
+
+  body[data-t="skc"] .cfg{border-radius:11px;border:2.6px solid var(--ink);
+    background:#f4edda;box-shadow:1.4px 1.4px 0 rgba(58,65,80,.18)}
+  body[data-t="skc"] .cfg.on{background:#f9f3e1}
+  body[data-t="skc"] .cfg.on::before{width:0}
+  body[data-t="skc"] .cfgn{font-size:16.5px;font-weight:900;
+    -webkit-text-stroke:.5px currentColor}
+  body[data-t="skc"] .cfgs{font-size:12.5px}
+  body[data-t="skc"] .cur{font-weight:900;border:1.8px solid var(--ink);
+    background:#dff0cd;-webkit-text-stroke:.3px currentColor}
+  body[data-t="skc"] .more{color:var(--ink)}
+  body[data-t="skc"] .menu{border:2.4px solid var(--ink);border-radius:10px;
+    background:#f7f1de}
+
+  body[data-t="acr"] .cfg{background:rgba(150,175,225,.10);
+    border:1px solid rgba(255,255,255,.12);border-radius:16px}
+  body[data-t="acr"] .cfg.on{background:rgba(150,175,225,.20);
+    border-color:rgba(122,162,255,.62);box-shadow:0 10px 26px rgba(0,0,0,.3)}
+  body[data-t="acr"] .cfgs{color:#a9b8d2}
+  body[data-t="acr"] .more{color:#8093b3}
+  body[data-t="acr"] .menu{background:rgba(18,26,44,.96);
+    border-color:rgba(255,255,255,.16)}
+  .row.note{height:auto;padding:0 16px 10px;font-size:11.5px;
+    color:var(--muted);cursor:default}
+  body[data-t="min"] .row.note{padding:0 2px 12px;font-size:12px;color:#868d97}
+  body[data-t="mnd"] .row.note{padding:0 2px 12px;font-size:12px;color:#7d838e}
+  body[data-t="acr"] .row.note{color:#b3c1da}
+  body[data-t="skc"] .row.note{padding:2px 18px 9px}
+
+  /* ================= 双栏卡 ================= */
+  .duo{display:flex;align-items:center;gap:12px}
+  .duo .lbl{font-size:11.5px;color:var(--muted);font-weight:400}
+  .duo .val{font-size:15.5px;font-weight:var(--title-w);margin-top:3px}
+  .duo .url{font-size:13px;font-weight:600;color:var(--ghost);margin-top:3px;
+    word-break:break-all}
+  .ghost-btn{flex:none;border:0;background:none;padding:8px 4px;color:var(--ghost);
+    font-size:14px;font-weight:600;cursor:pointer}
+  body[data-t="skc"] .ghost-btn{font-size:15px;font-weight:900;
+    -webkit-text-stroke:.4px currentColor}
+  body[data-t="acr"] .ghost-btn{color:var(--accent)}
+
+  /* ================= 测试卡 ================= */
+  .test-pair{display:flex;gap:10px;margin-bottom:10px}
+  .tbtn{flex:1;height:40px;border-radius:10px;cursor:pointer;
+    border:1px solid var(--line);background:transparent;
+    color:var(--ghost);font-size:13.5px;font-weight:600}
+  body[data-t="skc"] .tbtn{border:2.4px solid var(--ink);border-radius:9px;
+    color:var(--ink);font-weight:900;background:#faf4e3;
+    box-shadow:1.2px 1.2px 0 rgba(58,65,80,.16)}
+  body[data-t="acr"] .tbtn{background:rgba(255,255,255,.06);
+    border-color:rgba(255,255,255,.16);color:#cddcff}
+  body[data-t="min"] .tbtn{border-color:#e3e6ea;color:#4b5465}
+  body[data-t="mnd"] .tbtn{border-color:#2a2d34;color:#b6bcc7}
+  .field{height:38px;border-radius:9px;display:flex;align-items:center;padding:0 12px;
+    font-size:13px;color:var(--faint);border:1px solid var(--line);margin-bottom:10px}
+  body[data-t="skc"] .field{border:2.2px solid rgba(58,65,80,.55);background:#faf4e3}
+  body[data-t="acr"] .field{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.14)}
+  .result{min-height:64px;border-radius:9px;padding:9px 12px;
+    font-family:ui-monospace,Consolas,monospace;font-size:11.5px;line-height:1.6;
+    color:var(--muted);background:color-mix(in srgb, var(--ink) 4%, transparent)}
+  body[data-t="skc"] .result{background:#efe7d2;border:2.2px solid rgba(58,65,80,.45);color:#5b6373}
+  body[data-t="acr"] .result{background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.09);color:#b9c7e2}
+  body[data-t="min"] .result{background:#f3f4f7}
+  body[data-t="mnd"] .result{background:#181a1f}
+
+  /* ================= 主按钮 ================= */
+  .primary{width:100%;height:var(--primary-h);margin:10px 0 4px;border:0;
+    border-radius:var(--primary-r);cursor:pointer;background:var(--primary-bg);
+    color:var(--primary-fg);font-size:16px;font-weight:600;letter-spacing:1px;
+    box-shadow:0 6px 18px rgba(0,0,0,.14)}
+  body[data-t="skc"] .primary{position:relative;border-radius:14px;box-shadow:none;
+    background-image:
+      repeating-linear-gradient(50deg, rgba(255,255,255,.5) 0 1.7px, rgba(255,255,255,0) 1.7px 4.2px),
+      repeating-linear-gradient(-40deg, rgba(58,65,80,.07) 0 1px, rgba(58,65,80,0) 1px 5px);
+    font-weight:900;-webkit-text-stroke:.5px currentColor}
+  body[data-t="skc"] .primary::after{content:'';position:absolute;inset:0;
+    border-radius:inherit;border:2.5px solid var(--ink);filter:url(#rough)}
+  body[data-t="acr"] .primary{background:rgba(150,175,225,.2);
+    border:1px solid rgba(255,255,255,.2);backdrop-filter:blur(12px);
+    box-shadow:0 14px 34px rgba(0,0,0,.4)}
+
+  /* ================= 底部标签栏 ================= */
+  .tabs{flex:none;display:flex;height:62px;padding:0 6px 6px;
+    background:var(--tab-bg);border-top:1px solid var(--line)}
+  body[data-t="skc"] .tabs{border-top:0}
+  body[data-t="skc"] .tabs::before{content:'';position:absolute;top:0;left:0;right:0;
+    height:2.6px;background:var(--ink);filter:url(#roughFine)}
+  .tab{flex:1;border:0;background:none;cursor:pointer;display:flex;
+    flex-direction:column;align-items:center;justify-content:center;gap:3px;
+    color:var(--tab-off);font-size:11px;font-weight:600;letter-spacing:.4px;
+    padding-top:4px}
+  .tab svg{width:22px;height:22px;fill:none;stroke:currentColor;
+    stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+  .tab.on{color:var(--tab-on)}
+  body[data-t="skc"] .tab{font-size:12px;font-weight:900;
+    -webkit-text-stroke:.35px currentColor}
+  body[data-t="skc"] .tab svg{stroke-width:2.2;filter:url(#roughFine)}
+  body[data-t="min"] .tab.on svg,body[data-t="mnd"] .tab.on svg{stroke:var(--accent)}
+  body[data-t="acr"] .tab.on svg{stroke:var(--accent)}
+
+  /* 样式切换：三点 → 一根横线（上下两点翻球） */
+  .dots{position:relative;width:36px;height:36px;flex:none;border:0;background:none;
+    padding:0;cursor:pointer;perspective:160px}
+  .dots i{position:absolute;left:50%;top:50%;width:3.4px;height:3.4px;
+    border-radius:50%;background:var(--ink);opacity:.88;will-change:transform;
+    transform:translate(-50%,-50%) translateY(-6px) rotateX(0deg) scaleX(1) scaleY(1);
+    transition:transform .44s cubic-bezier(.32,1.16,.36,1), opacity .2s ease}
+  .dots i:nth-child(2){
+    transform:translate(-50%,-50%) translateY(0) rotateX(0deg) scaleX(1) scaleY(1)}
+  .dots i:nth-child(3){
+    transform:translate(-50%,-50%) translateY(6px) rotateX(0deg) scaleX(1) scaleY(1)}
+  .dots.open i:nth-child(1){
+    transform:translate(-50%,-50%) translateY(0) rotateX(88deg) scaleX(5.12) scaleY(1)}
+  .dots.open i:nth-child(3){
+    transform:translate(-50%,-50%) translateY(0) rotateX(-88deg) scaleX(5.12) scaleY(1)}
+  .dots.open i:nth-child(2){
+    transform:translate(-50%,-50%) translateY(0) rotateX(0deg) scaleX(5.12) scaleY(.59)}
+
+  /* 展开面板：悬空、向下伸出 */
+  .smenu{position:absolute;top:58px;right:10px;z-index:20;width:190px;padding:6px;
+    border-radius:14px;background:var(--menu-bg,#fff);border:1px solid var(--line);
+    box-shadow:0 18px 44px rgba(0,0,0,.18);
+    transform-origin:top right;opacity:0;pointer-events:none;
+    will-change:transform,opacity;
+    transform:translateY(-8px) scaleY(.82);
+    transition:opacity .14s ease,
+               transform .34s cubic-bezier(.22,.9,.28,1.1)}
+  .smenu.on{opacity:1;pointer-events:auto;transform:none}
+  .smenu button{display:flex;align-items:center;gap:10px;width:100%;border:0;
+    background:none;padding:8px 9px;border-radius:9px;cursor:pointer;
+    color:var(--ink);font-size:14px;font-weight:500;text-align:left}
+  .smenu button:hover{background:color-mix(in srgb, var(--ink) 6%, transparent)}
+  .smenu .chip{width:26px;height:26px;flex:none;border-radius:8px;
+    border:1px solid rgba(0,0,0,.12)}
+  .smenu .chip.c-min{background:#fbfbfc}
+  .smenu .chip.c-mnd{background:#0f1013;border-color:#3a3f47}
+  .smenu .chip.c-skc{background:#f7f1de;border-color:#3a4150}
+  .smenu .chip.c-acr{background:linear-gradient(150deg,#2a3f6b,#050810 70%)}
+  .smenu .tick{margin-left:auto;font-size:13px;color:var(--accent);opacity:0}
+  .smenu button.on .tick{opacity:1}
+  .smenu button.on{background:color-mix(in srgb, var(--accent) 10%, transparent)}
+
+  body[data-t="skc"] .smenu{border:2.4px solid var(--ink);border-radius:10px;
+    background:#f7f1de;box-shadow:2px 2px 0 rgba(58,65,80,.22)}
+  body[data-t="skc"] .smenu button{font-size:15px;font-weight:900;
+    -webkit-text-stroke:.4px currentColor}
+  body[data-t="acr"] .smenu{background:rgba(18,26,44,.97);
+    border-color:rgba(255,255,255,.16)}
+
+  /* ================= 交互动效 ================= */
+  @keyframes pageIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  .page.on{animation:pageIn .28s cubic-bezier(.22,.9,.3,1)}
+
+  @keyframes menuIn{from{opacity:0;transform:translateY(-6px) scaleY(.9)}to{opacity:1;transform:none}}
+  .menu{transform-origin:top right;animation:menuIn .2s cubic-bezier(.25,.9,.3,1.1)}
+
+  @keyframes cfgIn{from{opacity:0;transform:translateY(-7px) scale(.97)}to{opacity:1;transform:none}}
+  .cfg.new{animation:cfgIn .3s cubic-bezier(.25,.9,.3,1.1)}
+
+  @keyframes flash{0%{background:color-mix(in srgb,var(--accent) 22%,transparent)}
+                   100%{background:transparent}}
+  .result.flash{animation:flash .7s ease}
+
+  .ico-btn,.dots,.more,.tab,.row,.cfg,.primary,.tbtn,.sw,.field,.ghost-btn,.smenu button{
+    -webkit-tap-highlight-color:transparent}
+
+  .ico-btn{transition:transform .18s cubic-bezier(.3,.9,.4,1),opacity .2s}
+  .ico-btn:active{transform:scale(.88);opacity:1}
+
+  .more{transition:transform .18s cubic-bezier(.3,.9,.4,1),color .2s}
+  .more:active{transform:scale(.84)}
+
+  .dots{transition:transform .2s cubic-bezier(.3,.9,.4,1)}
+  .dots:active{transform:scale(.92)}
+
+  .tab{transition:color .22s ease,transform .2s cubic-bezier(.3,.9,.4,1)}
+  .tab svg{transition:transform .3s cubic-bezier(.3,1.1,.4,1),stroke .22s ease}
+  .tab span{transition:transform .3s cubic-bezier(.3,1.1,.4,1),opacity .2s}
+  .tab:active{transform:scale(.93)}
+  .tab.on svg{transform:translateY(-1.5px) scale(1.08)}
+  .tab.on span{transform:translateY(.5px)}
+
+  .row{transition:background .18s ease,transform .16s cubic-bezier(.3,.9,.4,1)}
+  .row:active{background:color-mix(in srgb,var(--ink) 5%,transparent);
+    transform:scale(.985)}
+  body[data-t="skc"] .row:active{background:rgba(58,65,80,.07)}
+  .row .chev{transition:transform .24s cubic-bezier(.3,.9,.4,1),stroke .2s}
+  .row:active .chev{transform:translateX(3px)}
+
+  .cfg{transition:transform .18s cubic-bezier(.3,.9,.4,1),border-color .2s,
+    background .2s,box-shadow .2s}
+  .cfg:active{transform:scale(.985)}
+
+  .primary{transition:transform .16s cubic-bezier(.3,.9,.4,1),box-shadow .22s,
+    background .22s,color .22s}
+  .primary:active{transform:scale(.975);box-shadow:0 2px 8px rgba(0,0,0,.16)}
+
+  .tbtn{transition:transform .16s cubic-bezier(.3,.9,.4,1),background .2s,
+    border-color .2s,color .2s}
+  .tbtn:active{transform:scale(.955)}
+
+  .ghost-btn{transition:transform .16s cubic-bezier(.3,.9,.4,1),color .2s}
+  .ghost-btn:active{transform:scale(.92)}
+
+  .sw{transition:background .26s ease,transform .18s cubic-bezier(.3,.9,.4,1)}
+  .sw:active{transform:scale(.95)}
+
+  .field{transition:transform .16s,border-color .2s,background .2s}
+  .field:active{transform:scale(.99);
+    border-color:color-mix(in srgb,var(--ink) 24%,transparent)}
+
+  .smenu button{transition:background .18s ease,transform .16s}
+  .smenu button:active{transform:scale(.98)}
+
+  .sec{transition:color .2s ease}
+  /* ===== 丝绸缎面：玻璃质感 ===== */
+  body[data-t="acr"] .card,
+  body[data-t="acr"] .tabs,
+  body[data-t="acr"] .menu,
+  body[data-t="acr"] .smenu{
+    backdrop-filter:blur(26px) saturate(168%) brightness(1.06);
+    -webkit-backdrop-filter:blur(26px) saturate(168%) brightness(1.06);
+  }
+  body[data-t="acr"] .card{
+    position:relative;
+    background:linear-gradient(158deg,rgba(255,255,255,.105) 0%,rgba(255,255,255,.030) 44%,rgba(150,175,225,.055) 100%);
+    border:1px solid rgba(255,255,255,.17);
+    border-top-color:rgba(255,255,255,.27);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.30),
+      inset 0 -1px 0 rgba(255,255,255,.045),
+      inset 1px 0 0 rgba(255,255,255,.055),
+      0 12px 34px rgba(0,0,0,.50),
+      0 2px 6px rgba(0,0,0,.34);
+  }
+  body[data-t="acr"] .card::after{
+    content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+    background:linear-gradient(180deg,rgba(255,255,255,.135),rgba(255,255,255,0) 36%);
+  }
+  body[data-t="acr"] .tabs{
+    position:relative;
+    background:linear-gradient(180deg,rgba(22,30,52,.62),rgba(6,10,20,.78));
+    border-top:1px solid rgba(255,255,255,.15);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.13),0 -8px 26px rgba(0,0,0,.42);
+  }
+  body[data-t="acr"] .field,
+  body[data-t="acr"] .cfg,
+  body[data-t="acr"] .tbtn{
+    background:linear-gradient(160deg,rgba(255,255,255,.075),rgba(255,255,255,.018));
+    border:1px solid rgba(255,255,255,.155);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.17),
+      inset 0 -1px 0 rgba(0,0,0,.20),
+      0 1px 2px rgba(0,0,0,.24);
+    backdrop-filter:blur(10px) saturate(150%);
+    -webkit-backdrop-filter:blur(10px) saturate(150%);
+  }
+  body[data-t="acr"] .field:focus-within,
+  body[data-t="acr"] .cfg.on{
+    border-color:rgba(140,180,255,.52);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.24),
+      0 0 0 3px rgba(90,140,255,.16),
+      0 2px 8px rgba(40,90,220,.24);
+  }
+  body[data-t="acr"] .primary{
+    background:linear-gradient(160deg,rgba(146,180,255,.46),rgba(96,136,232,.20));
+    border:1px solid rgba(170,200,255,.44);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.42),
+      inset 0 -1px 0 rgba(0,0,0,.16),
+      0 10px 26px rgba(50,100,235,.30),
+      0 1px 3px rgba(0,0,0,.32);
+    backdrop-filter:blur(14px) saturate(160%);
+    -webkit-backdrop-filter:blur(14px) saturate(160%);
+  }
+  body[data-t="acr"] .primary:active{
+    box-shadow:inset 0 2px 6px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.20),0 3px 10px rgba(50,100,235,.20);
+  }
+  body[data-t="acr"] .menu,
+  body[data-t="acr"] .smenu{
+    background:linear-gradient(160deg,rgba(26,36,62,.90),rgba(8,12,24,.94));
+    border:1px solid rgba(255,255,255,.17);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.18),
+      0 20px 48px rgba(0,0,0,.62),
+      0 2px 8px rgba(0,0,0,.40);
+  }
+  body[data-t="acr"] .result{
+    background:linear-gradient(160deg,rgba(0,0,0,.32),rgba(0,0,0,.20));
+    border:1px solid rgba(255,255,255,.10);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.07);
+  }
+</style>
+</head>
+<body data-t="min">
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <filter id="rough" x="-12%" y="-12%" width="124%" height="124%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.030" numOctaves="3" seed="7" result="n"/>
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="3.7" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+  <filter id="roughFine" x="-18%" y="-18%" width="136%" height="136%">
+    <feTurbulence type="fractalNoise" baseFrequency="0.050" numOctaves="3" seed="13" result="n"/>
+    <feDisplacementMap in="SourceGraphic" in2="n" scale="2.1" xChannelSelector="R" yChannelSelector="G"/>
+  </filter>
+</svg>
+
+<div class="phone">
+  <canvas id="bg"></canvas>
+
+  <!-- 顶栏 -->
+  <div class="topbar">
+    <button class="ico-btn" aria-label="返回">
+      <svg viewBox="0 0 24 24"><path d="M15 5 8 12l7 7"/></svg>
+    </button>
+    <div class="title" id="pageTitle"></div>
+    <button class="ico-btn" id="btnAdd" aria-label="添加供应商" style="visibility:hidden">
+      <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+    </button>
+    <button class="dots" id="btnStyle" aria-label="界面风格">
+      <i></i><i></i><i></i>
+    </button>
+    <button class="ico-btn" aria-label="设置">
+      <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.49.49 0 0 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.49.49 0 0 0-.12-.61l-2.03-1.58zM12 15.6a3.6 3.6 0 1 1 0-7.2 3.6 3.6 0 0 1 0 7.2z"/></svg>
+    </button>
+  </div>
+
+  <!-- 界面风格面板 -->
+  <div class="smenu" id="styleMenu">
+    <button data-t="min"><i class="chip c-min"></i><span>极简白</span><b class="tick">✓</b></button>
+    <button data-t="mnd"><i class="chip c-mnd"></i><span>极简黑</span><b class="tick">✓</b></button>
+    <button data-t="skc"><i class="chip c-skc"></i><span>手绘线稿</span><b class="tick">✓</b></button>
+    <button data-t="acr"><i class="chip c-acr"></i><span>丝绸缎面</span><b class="tick">✓</b></button>
+  </div>
+
+  <div class="body">
+
+    <!-- ============ 第一页：下游 + 启动 ============ -->
+    <section class="page on" data-p="0">
+      <div class="status">
+        <i class="dot"></i>
+        <div class="st">
+          <div class="t">运行中</div>
+          <div class="s">服务已启动，监听 127.0.0.1:38472</div>
+        </div>
+        <button class="sw on" id="runSw" aria-label="启停网关"><i></i></button>
+      </div>
+
+      <div class="sec">下游设置</div>
+      <div class="card list">
+        <div class="row"><span class="k">监听地址</span><span class="v">127.0.0.1</span>
+          <svg class="chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></div>
+        <div class="row"><span class="k">监听端口</span><span class="v">38472</span>
+          <svg class="chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></div>
+        <div class="row"><span class="k">下游密钥</span><span class="v">••••••••</span>
+          <svg class="chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></div>
+        <div class="row note">重新生成 Key 需重启网关生效</div>
+      </div>
+
+      <div class="card duo">
+        <div style="flex:1;min-width:0">
+          <div class="lbl">客户端接入地址</div>
+          <div class="url">http://127.0.0.1:38472/v1</div>
+        </div>
+        <button class="ghost-btn">复制</button>
+      </div>
+
+      <div class="sec">功能测试</div>
+      <div class="card" style="padding:13px">
+        <div class="test-pair">
+          <button class="tbtn">拉取模型</button>
+          <button class="tbtn">测试消息</button>
+        </div>
+        <div class="field">模型 ID（可选）</div>
+        <div class="result">未启动网关</div>
+      </div>
+
+      <button class="primary" id="btnMain">停止网关</button>
+    </section>
+
+    <!-- ============ 第二页：供应商 ============ -->
+    <section class="page" data-p="1">
+      <div class="cfglist" id="cfgList">
+        <div class="cfg on" data-name="默认供应商" data-url="api.example.com/v1">
+          <div class="cfgb">
+            <div class="cfgn">默认供应商</div>
+            <div class="cfgs">api.example.com/v1</div>
+          </div>
+          <div class="cfgr">
+            <span class="cur">使用中</span>
+            <button class="more" aria-label="更多">···</button>
+          </div>
+        </div>
+        <div class="cfg" data-name="备用供应商" data-url="api.example.org/v1">
+          <div class="cfgb">
+            <div class="cfgn">备用供应商</div>
+            <div class="cfgs">api.example.org/v1</div>
+          </div>
+          <div class="cfgr">
+            <span class="cur">使用中</span>
+            <button class="more" aria-label="更多">···</button>
+          </div>
+        </div>
+        <div class="cfg" data-name="本地中转" data-url="127.0.0.1:8080/v1">
+          <div class="cfgb">
+            <div class="cfgn">本地中转</div>
+            <div class="cfgs">127.0.0.1:8080/v1</div>
+          </div>
+          <div class="cfgr">
+            <span class="cur">使用中</span>
+            <button class="more" aria-label="更多">···</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 第三页：路由 ============ -->
+    <section class="page" data-p="2">
+      <div class="sec" style="margin-top:8px">路由与还原</div>
+      <div class="card list">
+        <div class="row"><span class="k">防路由等级</span><span class="v">Standard</span>
+          <svg class="chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></div>
+        <div class="row"><span class="k">熵注入</span><span class="v">Standard</span>
+          <svg class="chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></div>
+        <div class="row"><span class="k">模型上报</span><span class="v">响应头</span>
+          <svg class="chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></div>
+        <div class="row"><span class="k">流式还原</span><span class="v">开启</span>
+          <svg class="chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></div>
+      </div>
+
+      <div class="sec">诊断</div>
+      <div class="card list">
+        <div class="row"><span class="k">运行日志</span><span class="v sm">查看</span>
+          <svg class="chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></div>
+        <div class="row"><span class="k">崩溃日志</span><span class="v sm">查看</span>
+          <svg class="chev" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></svg></div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- 底部标签栏 -->
+  <nav class="tabs">
+    <button class="tab on" data-p="0">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4"/><path d="M12 3.6v3.2M12 17.2v3.2M3.6 12h3.2M17.2 12h3.2"/></svg>
+      <span>网关</span>
+    </button>
+    <button class="tab" data-p="1">
+      <svg viewBox="0 0 24 24"><path d="M12 3.4 20 7.6 12 11.8 4 7.6Z"/><path d="M4 12.2l8 4.2 8-4.2"/><path d="M4 16.6l8 4.2 8-4.2"/></svg>
+      <span>供应商</span>
+    </button>
+    <button class="tab" data-p="2">
+      <svg viewBox="0 0 24 24"><circle cx="6.4" cy="6.4" r="2.6"/><circle cx="6.4" cy="17.6" r="2.6"/><circle cx="17.6" cy="12" r="2.6"/><path d="M8.8 7.6c4 1.2 5 2.4 6.4 4.4M8.8 16.4c4-1.2 5-2.4 6.4-4.4"/></svg>
+      <span>路由</span>
+    </button>
+  </nav>
+</div>
+
+
+<script>
+(function () {
+  // ---------- 主题 ----------
+  const ORDER = ['min', 'mnd', 'skc', 'acr'];
+  const NAME = { min: '极简白', mnd: '极简黑', skc: '手绘线稿', acr: '丝绸缎面' };
+  const qs = new URLSearchParams(location.search);
+  let theme = qs.get('t');
+  if (!ORDER.includes(theme)) theme = 'min';
+
+  function apply(t) {
+    theme = t;
+    document.body.dataset.t = t;
+    const q = new URLSearchParams(location.search);
+    q.set('t', t);
+    history.replaceState(null, '', '?' + q.toString());
+    document.querySelectorAll('#styleMenu button').forEach(b => {
+      b.classList.toggle('on', b.dataset.t === t);
+    });
+    if (t === 'acr') startGL(); else stopGL();
+  }
+
+  const btnStyle = document.getElementById('btnStyle');
+  const styleMenu = document.getElementById('styleMenu');
+  btnStyle.onclick = e => {
+    e.stopPropagation();
+    const open = btnStyle.classList.toggle('open');
+    styleMenu.classList.toggle('on', open);
+  };
+  styleMenu.querySelectorAll('button').forEach(b => {
+    b.onclick = e => {
+      e.stopPropagation();
+      apply(b.dataset.t);
+      btnStyle.classList.remove('open');
+      styleMenu.classList.remove('on');
+    };
+  });
+  document.addEventListener('click', () => {
+    btnStyle.classList.remove('open');
+    styleMenu.classList.remove('on');
+  });
+
+  // ---------- 分页 ----------
+  const pages = [...document.querySelectorAll('.page')];
+  const tabs = [...document.querySelectorAll('.tab')];
+  let page = Math.max(0, Math.min(2, parseInt(qs.get('p') || '0', 10) || 0));
+  function go(p) {
+    page = p;
+    pages.forEach((el, i) => el.classList.toggle('on', i === p));
+    tabs.forEach((el, i) => el.classList.toggle('on', i === p));
+    document.getElementById('btnAdd').style.visibility = p === 1 ? 'visible' : 'hidden';
+    document.querySelector('.body').scrollTop = 0;
+    const q = new URLSearchParams(location.search);
+    q.set('p', p);
+    history.replaceState(null, '', '?' + q.toString());
+  }
+  tabs.forEach(t => t.onclick = () => go(parseInt(t.dataset.p, 10)));
+  go(page);
+
+  // ---------- 启停 ----------
+  const sw = document.getElementById('runSw');
+  sw.onclick = () => {
+    const on = sw.classList.toggle('on');
+    sw.classList.toggle('off', !on);
+    document.querySelector('.status .t').textContent = on ? '运行中' : '已停止';
+    document.querySelector('.status .s').textContent =
+      on ? '服务已启动，监听 127.0.0.1:38472' : '服务已停止';
+    document.querySelector('.status').style.setProperty('--dot-color',
+      on ? 'var(--accent)' : 'color-mix(in srgb, var(--muted) 46%, transparent)');
+    document.getElementById('btnMain').textContent = on ? '停止网关' : '启动网关';
+  };
+  document.getElementById('btnMain').onclick = () => sw.click();
+
+  // ---------- 供应商列表 ----------
+  let menuEl = null;
+  function closeMenu() { if (menuEl) { menuEl.remove(); menuEl = null; } }
+
+  function bindCfg(c) {
+    c.onclick = e => {
+      if (e.target.classList.contains('more')) {
+        e.stopPropagation();
+        const same = menuEl && menuEl.parentElement === c;
+        closeMenu();
+        if (same) return;
+        const m = document.createElement('div');
+        m.className = 'menu on';
+        m.innerHTML = '<button data-a="edit">编辑配置</button>'
+                    + '<button data-a="copy">复制地址</button>'
+                    + '<button class="danger" data-a="del">删除</button>';
+        c.appendChild(m);
+        menuEl = m;
+        m.querySelectorAll('button').forEach(b => {
+          b.onclick = ev => {
+            ev.stopPropagation();
+            const a = b.dataset.a;
+            closeMenu();
+            if (a === 'del' && document.querySelectorAll('.cfg').length > 1) {
+              c.remove();
+            }
+          };
+        });
+        return;
+      }
+      closeMenu();
+      document.querySelectorAll('.cfg').forEach(x => x.classList.remove('on'));
+      c.classList.add('on');
+    };
+  }
+  document.querySelectorAll('.cfg').forEach(bindCfg);
+
+  document.getElementById('btnAdd').onclick = () => {
+    const n = document.querySelectorAll('.cfg').length + 1;
+    const c = document.createElement('div');
+    c.className = 'cfg';
+    c.dataset.name = '供应商 ' + n;
+    c.dataset.url = 'api.example.net/v1';
+    c.innerHTML = '<div class="cfgb"><div class="cfgn">供应商 ' + n
+      + '</div><div class="cfgs">api.example.net/v1</div></div>'
+      + '<div class="cfgr"><span class="cur">使用中</span>'
+      + '<button class="more" aria-label="更多">···</button></div>';
+    document.getElementById('cfgList').appendChild(c);
+    bindCfg(c);
+    c.classList.add('new');
+    setTimeout(() => c.classList.remove('new'), 320);
+  };
+
+  document.addEventListener('click', e => {
+    if (menuEl && !menuEl.contains(e.target)) closeMenu();
+  });
+
+  // ---------- 丝绸缎面背景 ----------
+  const canvas = document.getElementById('bg');
+  let gl = null, prog = null, u = {}, raf = 0, running = false;
+  let W = 1, H = 1, elapsed = 0, lastT = 0, lastDraw = 0;
+
+  const VERT = `attribute vec2 aPos;void main(){gl_Position=vec4(aPos,0.0,1.0);}`;
+  const FRAG = `
+precision highp float;
+uniform vec2 uRes; uniform float uTime, uZoom, uRim, uContrast, uChurn, uFold;
+float noise(vec2 p){ return smoothstep(-0.5,0.9, sin((p.x-p.y)*555.0)*sin(p.y*1444.0))-0.4; }
+float fabric(vec2 p){
+  const mat2 m = mat2(1.6,1.2,-1.2,1.6);
+  float f = 0.4*noise(p);
+  f += 0.3*noise(p = m*p);
+  f += 0.2*noise(p = m*p);
+  return f + 0.1*noise(m*p);
+}
+float silk(vec2 uv, float t, float grain, float fold){
+  float s = sin(5.0*(uv.x+uv.y) + fold*cos(2.0*uv.x+5.0*uv.y)
+              + sin(12.0*(uv.x+uv.y)) - t);
+  s = 0.7 + 0.3*(s*s*0.5 + s);
+  s *= 0.95 + 0.18*fabric(uv*grain*0.32);
+  return s*0.9 + 0.1;
+}
+float silkd(vec2 uv, float t, float fold){
+  float xy = uv.x+uv.y;
+  float d = (5.0 - 2.0*fold*sin(2.0*uv.x+5.0*uv.y) + 12.0*cos(12.0*xy))
+          * cos(5.0*xy + fold*cos(2.0*uv.x+5.0*uv.y) + sin(12.0*xy) - t);
+  return 0.004*d*(sign(d)+3.0);
+}
+void main(){
+  vec2 frag = gl_FragCoord.xy;
+  float grain = min(uRes.x, uRes.y);
+  float base  = max(uRes.x, uRes.y);
+  vec2 uv = (frag - 0.5*uRes)/base*2.0 + 0.5;
+  uv /= uZoom;
+  float t = uTime;
+  vec2 q = uv;
+  q += uChurn*0.17*vec2(
+        sin(uv.y*2.30 + t*0.52) + 0.45*sin(uv.y*4.10 - t*0.34),
+        cos(uv.x*2.05 - t*0.47) + 0.45*cos(uv.x*3.65 + t*0.29));
+  q.y += uChurn*0.078*sin(7.0*q.x - t);
+  float tp = t*(1.0 + 0.40*uChurn*sin(q.x*2.55 + q.y*1.85 + t*0.21));
+  float s = sqrt(max(silk(q, tp, grain, uFold), 0.0));
+  float d = silkd(q, tp, uFold);
+  float v = clamp((s-0.58)*1.55, 0.0, 1.0);
+  v = clamp(v + d*0.85*uRim, 0.0, 1.0);
+  v = pow(v, 1.22);
+  v = clamp((v-0.5)*uContrast + 0.5, 0.0, 1.0);
+  vec3 cVoid=vec3(0.010,0.016,0.038), cDeep=vec3(0.042,0.072,0.160);
+  vec3 cMid=vec3(0.160,0.235,0.420), cLit=vec3(0.430,0.530,0.750);
+  vec3 cCrest=vec3(0.820,0.875,0.960);
+  vec3 col = mix(cVoid,cDeep,smoothstep(0.00,0.52,v));
+  col = mix(col,cMid,  smoothstep(0.26,0.76,v));
+  col = mix(col,cLit,  smoothstep(0.58,0.94,v));
+  col = mix(col,cCrest,smoothstep(0.86,1.00,v));
+  float vig = smoothstep(1.50,0.30, length((frag/uRes-0.5)*vec2(1.05,1.0))*1.5);
+  col *= mix(0.55,1.0,vig);
+  col = col/(col+0.90)*1.62;
+  gl_FragColor = vec4(col,1.0);
+}`;
+
+  function sh(type, src) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src); gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+      console.error(gl.getShaderInfoLog(s)); return null;
+    }
+    return s;
+  }
+  function resize() {
+    const r = canvas.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = Math.max(1, Math.round(r.width * dpr));
+    H = Math.max(1, Math.round(r.height * dpr));
+    canvas.width = W; canvas.height = H;
+    gl.viewport(0, 0, W, H);
+  }
+  function loop(now) {
+    raf = requestAnimationFrame(loop);
+    if (!lastT) lastT = now;
+    const dt = Math.min(now - lastT, 100); lastT = now;
+    elapsed += (dt / 1000) * 0.91;
+    if (now - lastDraw < 1000 / 40) return;
+    lastDraw = now;
+    gl.uniform2f(u.uRes, W, H);
+    gl.uniform1f(u.uTime, elapsed);
+    gl.uniform1f(u.uZoom, 4.8);
+    gl.uniform1f(u.uChurn, 0.48);
+    gl.uniform1f(u.uFold, 18.0);
+    gl.uniform1f(u.uRim, 0.52);
+    gl.uniform1f(u.uContrast, 1.07);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
+  function startGL() {
+    if (running) return;
+    if (!gl) {
+      gl = canvas.getContext('webgl', {antialias: false, alpha: false});
+      if (!gl) return;
+      const v = sh(gl.VERTEX_SHADER, VERT), f = sh(gl.FRAGMENT_SHADER, FRAG);
+      if (!v || !f) return;
+      prog = gl.createProgram();
+      gl.attachShader(prog, v); gl.attachShader(prog, f); gl.linkProgram(prog);
+      if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+        console.error(gl.getProgramInfoLog(prog)); return;
+      }
+      gl.useProgram(prog);
+      const buf = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+        -1,-1, 1,-1, -1,1, -1,1, 1,-1, 1,1
+      ]), gl.STATIC_DRAW);
+      const aPos = gl.getAttribLocation(prog, 'aPos');
+      gl.enableVertexAttribArray(aPos);
+      gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+      ['uRes','uTime','uZoom','uRim','uContrast','uChurn','uFold'].forEach(n => {
+        u[n] = gl.getUniformLocation(prog, n);
+      });
+      window.addEventListener('resize', resize);
+    }
+    resize();
+    running = true;
+    lastT = 0;
+    raf = requestAnimationFrame(loop);
+  }
+  function stopGL() {
+    running = false;
+    if (raf) cancelAnimationFrame(raf);
+    raf = 0;
+  }
+
+
+  // ---------- 测试卡 ----------
+  document.querySelectorAll('.tbtn').forEach((b, i) => {
+    b.onclick = () => {
+      const r = document.querySelector('.result');
+      r.textContent = i === 0 ? '正在拉取模型列表…' : '正在发送测试消息…';
+      r.classList.remove('flash');
+      void r.offsetWidth;
+      r.classList.add('flash');
+      clearTimeout(b._t);
+      b._t = setTimeout(() => {
+        r.textContent = i === 0
+          ? 'gpt-5.1\nclaude-sonnet-4.6\ngemini-3.1-pro'
+          : '200 OK · 模型上报成功';
+        r.classList.remove('flash');
+        void r.offsetWidth;
+        r.classList.add('flash');
+      }, 700);
+    };
+  });
+
+  // ---------- 复制 ----------
+  const gb = document.querySelector('.ghost-btn');
+  gb.onclick = () => {
+    if (gb._busy) return;
+    gb._busy = true;
+    const old = gb.textContent;
+    gb.textContent = '已复制';
+    gb.style.color = 'var(--accent)';
+    setTimeout(() => {
+      gb.textContent = old;
+      gb.style.color = '';
+      gb._busy = false;
+    }, 1200);
+  };
+  apply(theme);
+})();
+</script>
+</body>
+</html>

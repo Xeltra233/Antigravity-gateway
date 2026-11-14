@@ -1,13 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:background="@color/background">
+    android:background="?android:attr/colorBackground">
 
-    <!-- Top bar: app title + day/night/auto theme switch (top-right) -->
+    <!-- Animated silk backdrop. Only the silk skin makes this visible; every other skin keeps it
+         gone so no GL surface is spun up for a static palette. -->
+    <org.antigravity.gateway.ui.SilkRibbonView
+        android:id="@+id/silkBackdrop"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+    <!-- Top bar: title, settings, skin toggle -->
     <LinearLayout
         android:id="@+id/layoutTopBar"
         android:layout_width="match_parent"
@@ -16,16 +28,18 @@
         android:gravity="center_vertical"
         android:paddingStart="16dp"
         android:paddingEnd="8dp"
-        android:background="@color/primary">
+        android:background="?attr/agwTopBar">
 
-        <TextView
+        <View
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="@string/app_name"
-            android:textColor="@color/on_primary"
-            android:textSize="18sp"
-            android:textStyle="bold" />
+            android:layout_height="1dp"
+            android:layout_weight="1" />
+
+        <org.antigravity.gateway.ui.StyleToggleView
+            android:id="@+id/btnStyle"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless" />
 
         <ImageButton
             android:id="@+id/btnSettings"
@@ -35,17 +49,7 @@
             android:contentDescription="@string/settings_entry"
             android:scaleType="centerInside"
             android:src="@drawable/ic_settings"
-            app:tint="@color/on_primary" />
-
-        <ImageButton
-            android:id="@+id/btnThemeMode"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/theme_switch"
-            android:scaleType="centerInside"
-            android:src="@drawable/ic_theme_auto"
-            app:tint="@color/on_primary" />
+            app:tint="?attr/colorOnSurface" />
     </LinearLayout>
 
     <ScrollView
@@ -53,7 +57,7 @@
         android:layout_height="0dp"
         android:layout_weight="1"
         android:fillViewport="true"
-        android:background="@color/background">
+        android:background="?android:attr/colorBackground">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -68,7 +72,7 @@
                 android:layout_marginBottom="12dp"
                 app:cardCornerRadius="12dp"
                 app:cardElevation="2dp"
-                app:cardBackgroundColor="@color/surface">
+                app:cardBackgroundColor="?attr/colorSurface">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -92,7 +96,7 @@
                             android:layout_height="wrap_content"
                             android:text="@string/provider_label"
                             android:textSize="12sp"
-                            android:textColor="@color/text_secondary" />
+                            android:textColor="?android:attr/textColorSecondary" />
 
                         <LinearLayout
                             android:layout_width="wrap_content"
@@ -107,7 +111,7 @@
                                 android:text="默认供应商"
                                 android:textSize="16sp"
                                 android:textStyle="bold"
-                                android:textColor="@color/text_primary" />
+                                android:textColor="?attr/colorOnSurface" />
 
                             <ImageButton
                                 android:id="@+id/btnRenameCurrentProvider"
@@ -125,7 +129,7 @@
                         style="@style/Widget.MaterialComponents.Button.TextButton"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:textColor="@color/link"
+                        android:textColor="?attr/agwLink"
                         android:text="切换/新建" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
@@ -137,7 +141,7 @@
                 android:layout_marginBottom="12dp"
                 app:cardCornerRadius="12dp"
                 app:cardElevation="2dp"
-                app:cardBackgroundColor="@color/surface">
+                app:cardBackgroundColor="?attr/colorSurface">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -152,16 +156,15 @@
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="12dp"
                         android:hint="@string/upstream_url_label"
-                        app:hintTextColor="@color/text_secondary"
+                        app:hintTextColor="?android:attr/textColorSecondary"
                         style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
-
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/etUpstreamUrl"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:inputType="textUri"
-                            android:textColor="@color/text_primary"
-                            android:textColorHint="@color/text_secondary"
+                            android:textColor="?attr/colorOnSurface"
+                            android:textColorHint="?android:attr/textColorSecondary"
                             android:singleLine="true" />
                     </com.google.android.material.textfield.TextInputLayout>
 
@@ -172,17 +175,16 @@
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="12dp"
                         android:hint="@string/upstream_key_label"
-                        app:hintTextColor="@color/text_secondary"
+                        app:hintTextColor="?android:attr/textColorSecondary"
                         app:passwordToggleEnabled="true"
                         style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
-
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/etUpstreamKey"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:inputType="textPassword"
-                            android:textColor="@color/text_primary"
-                            android:textColorHint="@color/text_secondary"
+                            android:textColor="?attr/colorOnSurface"
+                            android:textColorHint="?android:attr/textColorSecondary"
                             android:singleLine="true" />
                     </com.google.android.material.textfield.TextInputLayout>
 
@@ -192,7 +194,7 @@
                         android:layout_height="wrap_content"
                         android:text="@string/downstream_key_label"
                         android:textSize="12sp"
-                        android:textColor="@color/text_secondary"
+                        android:textColor="?android:attr/textColorSecondary"
                         android:layout_marginBottom="4dp" />
 
                     <LinearLayout
@@ -207,17 +209,16 @@
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            app:hintTextColor="@color/text_secondary"
+                            app:hintTextColor="?android:attr/textColorSecondary"
                             app:passwordToggleEnabled="true"
                             style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense">
-
                             <com.google.android.material.textfield.TextInputEditText
                                 android:id="@+id/etDownstreamKey"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:inputType="textPassword"
-                                android:textColor="@color/text_primary"
-                                android:textColorHint="@color/text_secondary"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textColorHint="?android:attr/textColorSecondary"
                                 android:focusable="false"
                                 android:clickable="true"
                                 android:cursorVisible="false"
@@ -230,7 +231,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginStart="8dp"
-                            android:textColor="@color/link"
+                            android:textColor="?attr/agwLink"
                             android:text="@string/generate_key" />
 
                         <com.google.android.material.button.MaterialButton
@@ -239,7 +240,7 @@
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginStart="4dp"
-                            android:textColor="@color/link"
+                            android:textColor="?attr/agwLink"
                             android:text="@string/copy_key" />
                     </LinearLayout>
 
@@ -249,7 +250,7 @@
                         android:layout_height="wrap_content"
                         android:text="* 重新生成 Key 需重启网关生效"
                         android:textSize="11sp"
-                        android:textColor="@color/text_secondary"
+                        android:textColor="?android:attr/textColorSecondary"
                         android:visibility="gone" />
 
                     <TextView
@@ -258,7 +259,7 @@
                         android:layout_height="wrap_content"
                         android:text="@string/settings_restart_to_apply"
                         android:textSize="11sp"
-                        android:textColor="@color/text_secondary"
+                        android:textColor="?android:attr/textColorSecondary"
                         android:visibility="gone" />
 
                     <!-- Row 4: Port Input -->
@@ -268,16 +269,15 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
                         android:hint="@string/gateway_port_label"
-                        app:hintTextColor="@color/text_secondary"
+                        app:hintTextColor="?android:attr/textColorSecondary"
                         style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
-
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/etGatewayPort"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:inputType="number"
-                            android:textColor="@color/text_primary"
-                            android:textColorHint="@color/text_secondary"
+                            android:textColor="?attr/colorOnSurface"
+                            android:textColorHint="?android:attr/textColorSecondary"
                             android:singleLine="true" />
                     </com.google.android.material.textfield.TextInputLayout>
                 </LinearLayout>
@@ -290,7 +290,7 @@
                 android:layout_marginBottom="12dp"
                 app:cardCornerRadius="12dp"
                 app:cardElevation="2dp"
-                app:cardBackgroundColor="@color/surface">
+                app:cardBackgroundColor="?attr/colorSurface">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -310,7 +310,7 @@
                             android:layout_height="wrap_content"
                             android:text="@string/app_link_label"
                             android:textSize="12sp"
-                            android:textColor="@color/text_secondary" />
+                            android:textColor="?android:attr/textColorSecondary" />
 
                         <TextView
                             android:id="@+id/tvAppLink"
@@ -319,7 +319,7 @@
                             android:text="http://127.0.0.1:38472/v1"
                             android:textSize="14sp"
                             android:textStyle="bold"
-                            android:textColor="@color/link"
+                            android:textColor="?attr/agwLink"
                             android:textIsSelectable="true" />
                     </LinearLayout>
 
@@ -328,7 +328,7 @@
                         style="@style/Widget.MaterialComponents.Button.TextButton"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:textColor="@color/link"
+                        android:textColor="?attr/agwLink"
                         android:text="@string/copy_key" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
@@ -340,10 +340,10 @@
                 android:layout_height="52dp"
                 android:layout_marginBottom="16dp"
                 android:text="@string/start_gateway"
-                android:textColor="@color/on_primary"
+                android:textColor="?attr/colorOnPrimary"
                 android:textSize="16sp"
                 app:cornerRadius="12dp"
-                app:backgroundTint="@color/primary" />
+                app:backgroundTint="?attr/colorPrimary" />
 
             <!-- Status & Test Card -->
             <com.google.android.material.card.MaterialCardView
@@ -352,7 +352,7 @@
                 android:layout_marginBottom="16dp"
                 app:cardCornerRadius="12dp"
                 app:cardElevation="2dp"
-                app:cardBackgroundColor="@color/surface">
+                app:cardBackgroundColor="?attr/colorSurface">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -366,7 +366,7 @@
                         android:text="功能测试与状态"
                         android:textSize="14sp"
                         android:textStyle="bold"
-                        android:textColor="@color/text_primary"
+                        android:textColor="?attr/colorOnSurface"
                         android:layout_marginBottom="10dp" />
 
                     <!-- Test Action Buttons -->
@@ -383,7 +383,7 @@
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
                             android:enabled="false"
-                            android:textColor="@color/link"
+                            android:textColor="?attr/agwLink"
                             android:text="@string/fetch_models" />
 
                         <com.google.android.material.button.MaterialButton
@@ -394,7 +394,7 @@
                             android:layout_marginStart="8dp"
                             android:layout_weight="1"
                             android:enabled="false"
-                            android:textColor="@color/link"
+                            android:textColor="?attr/agwLink"
                             android:text="@string/test_message" />
                     </LinearLayout>
 
@@ -405,15 +405,14 @@
                         android:layout_height="wrap_content"
                         android:layout_marginBottom="8dp"
                         android:hint="@string/custom_model_id_hint"
-                        app:hintTextColor="@color/text_secondary"
+                        app:hintTextColor="?android:attr/textColorSecondary"
                         style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense">
-
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/etTestModelId"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:textColor="@color/text_primary"
-                            android:textColorHint="@color/text_secondary"
+                            android:textColor="?attr/colorOnSurface"
+                            android:textColorHint="?android:attr/textColorSecondary"
                             android:singleLine="true" />
                     </com.google.android.material.textfield.TextInputLayout>
 
@@ -433,7 +432,7 @@
                         android:layout_height="wrap_content"
                         android:text="@string/test_result_title"
                         android:textSize="12sp"
-                        android:textColor="@color/text_secondary"
+                        android:textColor="?android:attr/textColorSecondary"
                         android:layout_marginBottom="4dp" />
 
                     <TextView
@@ -442,21 +441,21 @@
                         android:layout_height="wrap_content"
                         android:minLines="3"
                         android:maxLines="10"
-                        android:background="@color/log_background"
+                        android:background="?attr/agwLogBg"
                         android:padding="10dp"
                         android:text="未启动网关"
                         android:fontFamily="monospace"
                         android:textSize="12sp"
-                        android:textColor="@color/text_primary"
+                        android:textColor="?attr/colorOnSurface"
                         android:scrollbars="vertical" />
                     <TextView
                         android:id="@+id/tvSafeModeBanner"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="4dp"
-                        android:background="@color/log_background"
+                        android:background="?attr/agwLogBg"
                         android:padding="10dp"
-                        android:textColor="@color/link"
+                        android:textColor="?attr/agwLink"
                         android:textSize="12sp"
                         android:visibility="gone"
                         tools:text="安全模式：检测到连续 3 次启动未成功" />
@@ -469,7 +468,7 @@
                         android:layout_height="wrap_content"
                         android:layout_gravity="end"
                         android:layout_marginTop="4dp"
-                        android:textColor="@color/link"
+                        android:textColor="?attr/agwLink"
                         android:visibility="gone"
                         tools:text="查看崩溃日志 (1)" />
                 </LinearLayout>
@@ -477,4 +476,5 @@
 
         </LinearLayout>
     </ScrollView>
-</LinearLayout>
+    </LinearLayout>
+</FrameLayout>

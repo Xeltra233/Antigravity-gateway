@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>本地 API 网关 — 手绘线稿风预览</title>
+<style>
+  :root{
+    --paper:#f7f1de;
+    --paper-deep:#efe6cd;
+    --ink:#3a4150;
+    --ink-soft:#5c6577;
+    --ink-faint:#8a8f9c;
+    --blue:#6f9dd8;
+    --blue-light:#93b5e4;
+    --green:#7dbf45;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    margin:0;display:grid;place-items:center;min-height:100vh;
+    background:#e6dfc9;
+    font-family:"PingFang SC","Microsoft YaHei","Noto Sans SC",system-ui,sans-serif;
+    color:var(--ink);
+    -webkit-font-smoothing:antialiased;
+  }
+  .defs{position:absolute;width:0;height:0;overflow:hidden}
+
+  .phone{
+    position:relative;width:420px;height:932px;overflow:hidden;
+    background:
+      radial-gradient(120% 80% at 50% 0%, #fbf6e6 0%, var(--paper) 42%, var(--paper-deep) 100%);
+    box-shadow:0 26px 74px rgba(70,58,32,.3), 0 0 0 1px rgba(90,78,50,.14);
+  }
+  /* 纸张纤维 */
+  .phone::after{
+    content:'';position:absolute;inset:0;z-index:20;pointer-events:none;
+    opacity:.58;mix-blend-mode:multiply;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='200' height='200'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='4' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='200' height='200' filter='url(%23g)' opacity='0.3'/></svg>");
+  }
+
+  .scroll{position:relative;height:100%;overflow-y:auto;padding:0 26px 34px;z-index:1}
+  .scroll::-webkit-scrollbar{width:0}
+
+  /* ---------- 顶栏 ---------- */
+  .topbar{
+    position:sticky;top:0;z-index:6;
+    display:flex;align-items:center;gap:10px;
+    margin:0 -26px;padding:18px 26px 16px;
+    background:linear-gradient(#faf5e5 74%, rgba(250,245,229,0));
+  }
+  .topbar::after{
+    content:'';position:absolute;left:0;right:0;bottom:2px;height:0;
+    border-top:1.8px solid rgba(58,65,80,.8);
+    filter:url(#roughFine);
+  }
+  .title{flex:1;text-align:center;font-size:23.5px;font-weight:900;letter-spacing:.9px;-webkit-text-stroke:.7px currentColor}
+  .icon-btn{
+    width:34px;height:34px;display:grid;place-items:center;
+    background:none;border:0;padding:0;cursor:pointer;
+  }
+  .ico{
+    width:23px;height:23px;fill:none;stroke:var(--ink);
+    stroke-width:2.3;stroke-linecap:round;stroke-linejoin:round;
+  .ico.gear{stroke-width:1.75}
+  .ico.gear circle{stroke-width:2.1}
+    filter:url(#roughFine);
+  }
+
+  /* ---------- 卡片 ---------- */
+  .card{position:relative;margin:0 0 23px}
+  .card::before{
+    content:'';position:absolute;inset:0;
+    border:2.6px solid var(--ink);border-radius:11px;
+    box-shadow:1.4px 1.4px 0 rgba(58,65,80,.2);
+    filter:url(#rough);
+    pointer-events:none;
+  }
+  .row{
+    position:relative;
+    display:flex;align-items:center;gap:12px;
+    padding:19px 18px;min-height:65px;
+  }
+  .row + .row::before{
+    content:'';position:absolute;top:0;left:18px;right:18px;height:0;
+    border-top:1.25px solid rgba(58,65,80,.75);
+    filter:url(#roughFine);
+  }
+  .row .t{font-size:17px;font-weight:900;letter-spacing:.25px;-webkit-text-stroke:.6px currentColor}
+  .row .v{
+    margin-left:auto;font-size:17px;font-weight:800;color:#4b5465;
+    font-variant-numeric:tabular-nums;letter-spacing:.25px;-webkit-text-stroke:.5px currentColor;
+  }
+  .chev{
+    width:15px;height:15px;flex:none;
+    fill:none;stroke:var(--ink-soft);stroke-width:2.4;
+    stroke-linecap:round;stroke-linejoin:round;
+    filter:url(#roughFine);
+  }
+
+  /* ---------- 分区标题 ---------- */
+  .sec{
+    font-size:16.5px;font-weight:900;letter-spacing:.7px;
+    color:#434b5a;margin:7px 0 13px 6px;-webkit-text-stroke:.45px currentColor;
+  }
+  .sec:not(:first-child){margin-top:8px}
+
+  /* ---------- 状态卡 ---------- */
+  .status{margin-top:15px}
+  .status .row{padding:21px 18px;gap:14px}
+  .dot{
+    width:25px;height:25px;border-radius:50%;flex:none;
+    background:
+      radial-gradient(circle at 36% 30%, #b2e07c 0%, #82c94a 54%, #68a934 100%);
+    filter:url(#rough);
+  }
+  .status .label{display:flex;flex-direction:column;gap:3px;min-width:0}
+  .status .label .t{font-size:19px;font-weight:800;letter-spacing:.4px}
+  .status .label .s{font-size:12.5px;font-weight:700;color:var(--ink-faint);letter-spacing:.1px}
+
+  /* ---------- 开关 ---------- */
+  .sw{
+    position:relative;margin-left:auto;flex:none;
+    width:66px;height:34px;border-radius:17px;
+    background:var(--blue);cursor:pointer;
+    filter:url(#rough);
+    transition:background .16s ease;
+  }
+  .sw::before{
+    content:'';position:absolute;top:3.5px;left:3.5px;
+    width:26px;height:26px;border-radius:50%;
+    background:#fff;
+    box-shadow:0 1px 2px rgba(40,45,60,.22);
+    transition:transform .16s ease;
+  }
+  .sw::after{
+    content:'';position:absolute;inset:0;border-radius:19px;
+    border:2.3px solid var(--ink);
+    background-image:repeating-linear-gradient(52deg, rgba(255,255,255,.34) 0 1.5px, rgba(255,255,255,0) 1.5px 5px);
+    pointer-events:none;
+  }
+  .sw.on::before{transform:translateX(30px)}
+  .sw.off{background:#c9c3ae}
+
+  /* ---------- 主按钮 ---------- */
+  .primary{
+    position:relative;margin:28px 0 6px;height:62px;
+    display:grid;place-items:center;cursor:pointer;
+    border:0;background:none;width:100%;padding:0;
+    font-family:inherit;font-size:20px;font-weight:800;letter-spacing:1px;
+    color:var(--ink);
+  }
+  .primary::before{
+    content:'';position:absolute;inset:0;
+    border:2.5px solid var(--ink);border-radius:14px;
+    background-color:#9cbce7;
+    background-image:
+      repeating-linear-gradient(50deg, rgba(255,255,255,.5) 0 1.7px, rgba(255,255,255,0) 1.7px 4.2px),
+      repeating-linear-gradient(-40deg, rgba(58,65,80,.07) 0 1px, rgba(58,65,80,0) 1px 5px);
+    filter:url(#rough);
+    transition:transform .12s ease;
+  }
+  .primary span{position:relative;z-index:1}
+  .primary:active::before{transform:translateY(1px) scale(.995)}
+
+  .foot{
+    margin:22px 0 0;text-align:center;
+    font-size:12px;font-weight:600;color:rgba(90,100,120,.55);letter-spacing:.4px;
+  }
+</style>
+</head>
+<body>
+
+<svg class="defs" aria-hidden="true">
+  <defs>
+    <filter id="rough" x="-12%" y="-12%" width="124%" height="124%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.030" numOctaves="3" seed="7" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="3.7" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+    <filter id="roughFine" x="-18%" y="-18%" width="136%" height="136%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.050" numOctaves="3" seed="13" result="n"/>
+      <feDisplacementMap in="SourceGraphic" in2="n" scale="2.1" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+</svg>
+
+<main class="phone">
+  <div class="scroll">
+
+    <div class="topbar">
+      <button class="icon-btn" aria-label="返回">
+        <svg class="ico" viewBox="0 0 24 24"><path d="M15.2 4.8 6.4 12l8.8 7.2"/></svg>
+      </button>
+      <div class="title">本地 API 网关</div>
+      <button class="icon-btn" aria-label="设置">
+        <svg class="ico gear" viewBox="0 0 24 24">
+          <path d="M10.19 4.16 L10.15 2.02 L13.85 2.02 L13.81 4.16 L16.27 5.17 L17.75 3.64 L20.36 6.25 L18.83 7.73 L19.84 10.19 L21.98 10.15 L21.98 13.85 L19.84 13.81 L18.83 16.27 L20.36 17.75 L17.75 20.36 L16.27 18.83 L13.81 19.84 L13.85 21.98 L10.15 21.98 L10.19 19.84 L7.73 18.83 L6.25 20.36 L3.64 17.75 L5.17 16.27 L4.16 13.81 L2.02 13.85 L2.02 10.15 L4.16 10.19 L5.17 7.73 L3.64 6.25 L6.25 3.64 L7.73 5.17 Z"/>
+          <circle cx="12" cy="12" r="3.35"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="card status">
+      <div class="row">
+        <div class="dot"></div>
+        <div class="label">
+          <div class="t">运行中</div>
+          <div class="s">服务已启动，正在监听…</div>
+        </div>
+        <div class="sw on" id="swRun" role="switch" aria-checked="true" tabindex="0"></div>
+      </div>
+    </div>
+
+    <div class="sec">基本设置</div>
+    <div class="card">
+      <div class="row">
+        <div class="t">监听地址</div>
+        <div class="v">127.0.0.1</div>
+        <svg class="chev" viewBox="0 0 24 24"><path d="M9.4 4.8 16.2 12l-6.8 7.2"/></svg>
+      </div>
+      <div class="row">
+        <div class="t">监听端口</div>
+        <div class="v">7890</div>
+        <svg class="chev" viewBox="0 0 24 24"><path d="M9.4 4.8 16.2 12l-6.8 7.2"/></svg>
+      </div>
+      <div class="row">
+        <div class="t">访问密钥</div>
+        <div class="v">••••••••</div>
+        <svg class="chev" viewBox="0 0 24 24"><path d="M9.4 4.8 16.2 12l-6.8 7.2"/></svg>
+      </div>
+    </div>
+
+    <div class="sec">高级设置</div>
+    <div class="card">
+      <div class="row">
+        <div class="t">代理模式</div>
+        <div class="v">智能代理</div>
+        <svg class="chev" viewBox="0 0 24 24"><path d="M9.4 4.8 16.2 12l-6.8 7.2"/></svg>
+      </div>
+      <div class="row">
+        <div class="t">上游地址</div>
+        <div class="v">api.example.com</div>
+        <svg class="chev" viewBox="0 0 24 24"><path d="M9.4 4.8 16.2 12l-6.8 7.2"/></svg>
+      </div>
+      <div class="row">
+        <div class="t">缓存策略</div>
+        <div class="v">60 秒</div>
+        <svg class="chev" viewBox="0 0 24 24"><path d="M9.4 4.8 16.2 12l-6.8 7.2"/></svg>
+      </div>
+    </div>
+
+
+    <button class="primary"><span>保存设置</span></button>
+
+    <div class="foot">Antigravity Gateway · v1.0.15</div>
+
+  </div>
+</main>
+
+<script>
+  (() => {
+    'use strict';
+    const sw = document.getElementById('swRun');
+    const toggle = () => {
+      const on = sw.classList.toggle('on');
+      sw.classList.toggle('off', !on);
+      sw.setAttribute('aria-checked', String(on));
+      const s = sw.closest('.row').querySelector('.status .s, .label .s');
+      if (s) s.textContent = on ? '服务已启动，正在监听…' : '服务已停止';
+    };
+    sw.addEventListener('click', toggle);
+    sw.addEventListener('keydown', e => {
+      if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); toggle(); }
+    });
+  })();
+</script>
+</body>
+</html>

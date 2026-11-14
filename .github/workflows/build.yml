@@ -69,10 +69,39 @@ jobs:
         run: |
           ./gradlew :app:testDebugUnitTest
 
+      - name: Inject Release Keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.AGW_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.AGW_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.AGW_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.AGW_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [ -z "${KEYSTORE_BASE64:-}" ]; then
+            echo "::error::AGW_KEYSTORE_BASE64 is missing; refusing to build a differently-signed APK."
+            exit 1
+          fi
+          KEYSTORE_PATH="$RUNNER_TEMP/release.jks"
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$KEYSTORE_PATH"
+          {
+            echo "AGW_KEYSTORE_PATH=$KEYSTORE_PATH"
+            echo "AGW_KEYSTORE_PASSWORD=$KEYSTORE_PASSWORD"
+            echo "AGW_KEY_ALIAS=$KEY_ALIAS"
+            echo "AGW_KEY_PASSWORD=$KEY_PASSWORD"
+          } >> "$GITHUB_ENV"
+
       - name: Assemble Android Release APK
         working-directory: android
         run: |
           ./gradlew :app:assembleRelease
+
+      - name: Verify APK Signature
+        run: |
+          set -euo pipefail
+          APK=$(ls android/app/build/outputs/apk/release/antigravity-gateway-*.apk | head -1)
+          BT=$(ls -d "${ANDROID_HOME:-$ANDROID_SDK_ROOT}"/build-tools/* | sort -V | tail -1)
+          "$BT/apksigner" verify --print-certs "$APK" | tee /tmp/certs.txt
+          grep -i "Signer #1 certificate SHA-256 digest" /tmp/certs.txt
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4

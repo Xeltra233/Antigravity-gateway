@@ -20,7 +20,7 @@
             android:text="@string/settings_section_guard"
             android:textSize="13sp"
             android:textStyle="bold"
-            android:textColor="@color/text_primary"
+            android:textColor="?attr/colorOnSurface"
             android:layout_marginBottom="8dp" />
 
         <TextView
@@ -28,7 +28,7 @@
             android:layout_height="wrap_content"
             android:text="@string/settings_guard_level"
             android:textSize="12sp"
-            android:textColor="@color/text_secondary" />
+            android:textColor="?android:attr/textColorSecondary" />
 
         <Spinner
             android:id="@+id/spGuardLevel"
@@ -42,7 +42,7 @@
             android:layout_height="wrap_content"
             android:text="@string/hint_level_wire"
             android:textSize="11sp"
-            android:textColor="@color/text_secondary"
+            android:textColor="?android:attr/textColorSecondary"
             android:layout_marginTop="2dp" />
 
         <com.google.android.material.switchmaterial.SwitchMaterial
@@ -50,14 +50,14 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="@string/settings_wire_escape"
-            android:textColor="@color/text_primary" />
+            android:textColor="?attr/colorOnSurface" />
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="6dp"
             android:text="@string/hint_wire_escape"
-            android:textColor="@color/text_secondary"
+            android:textColor="?android:attr/textColorSecondary"
             android:textSize="11sp" />
 
         <com.google.android.material.switchmaterial.SwitchMaterial
@@ -65,14 +65,14 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="@string/settings_scrub"
-            android:textColor="@color/text_primary" />
+            android:textColor="?attr/colorOnSurface" />
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="6dp"
             android:text="@string/hint_scrub"
-            android:textColor="@color/text_secondary"
+            android:textColor="?android:attr/textColorSecondary"
             android:textSize="11sp" />
 
         <com.google.android.material.switchmaterial.SwitchMaterial
@@ -80,14 +80,14 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="@string/settings_split"
-            android:textColor="@color/text_primary" />
+            android:textColor="?attr/colorOnSurface" />
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="6dp"
             android:text="@string/hint_split"
-            android:textColor="@color/text_secondary"
+            android:textColor="?android:attr/textColorSecondary"
             android:textSize="11sp" />
 
         <com.google.android.material.switchmaterial.SwitchMaterial
@@ -96,14 +96,14 @@
             android:layout_height="wrap_content"
             android:layout_marginBottom="8dp"
             android:text="@string/settings_demote_prefill"
-            android:textColor="@color/text_primary" />
+            android:textColor="?attr/colorOnSurface" />
 
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="6dp"
             android:text="@string/hint_demote_prefill"
-            android:textColor="@color/text_secondary"
+            android:textColor="?android:attr/textColorSecondary"
             android:textSize="11sp" />
 
         <TextView
@@ -111,7 +111,7 @@
             android:layout_height="wrap_content"
             android:text="@string/settings_scrub_scope"
             android:textSize="12sp"
-            android:textColor="@color/text_secondary" />
+            android:textColor="?android:attr/textColorSecondary" />
 
         <Spinner
             android:id="@+id/spScrubScope"
@@ -125,7 +125,7 @@
             android:layout_height="wrap_content"
             android:layout_marginBottom="8dp"
             android:text="@string/hint_scope_leading"
-            android:textColor="@color/text_secondary"
+            android:textColor="?android:attr/textColorSecondary"
             android:textSize="11sp" />
 
         <TextView
@@ -133,7 +133,7 @@
             android:layout_height="wrap_content"
             android:text="@string/settings_separator"
             android:textSize="12sp"
-            android:textColor="@color/text_secondary" />
+            android:textColor="?android:attr/textColorSecondary" />
 
         <Spinner
             android:id="@+id/spSeparator"
@@ -147,7 +147,7 @@
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
             android:text="@string/hint_separator_hyphen"
-            android:textColor="@color/text_secondary"
+            android:textColor="?android:attr/textColorSecondary"
             android:textSize="11sp" />
 
         <TextView
@@ -156,7 +156,7 @@
             android:text="@string/settings_section_model"
             android:textSize="13sp"
             android:textStyle="bold"
-            android:textColor="@color/text_primary"
+            android:textColor="?attr/colorOnSurface"
             android:layout_marginBottom="8dp" />
 
         <TextView
@@ -164,7 +164,7 @@
             android:layout_height="wrap_content"
             android:text="@string/settings_model_report"
             android:textSize="12sp"
-            android:textColor="@color/text_secondary" />
+            android:textColor="?android:attr/textColorSecondary" />
 
         <Spinner
             android:id="@+id/spModelReport"
@@ -178,7 +178,7 @@
             android:layout_height="wrap_content"
             android:layout_marginBottom="8dp"
             android:text="@string/hint_report_headers"
-            android:textColor="@color/text_secondary"
+            android:textColor="?android:attr/textColorSecondary"
             android:textSize="11sp" />
 
         <com.google.android.material.textfield.TextInputLayout
@@ -188,7 +188,7 @@
             android:layout_height="wrap_content"
             android:layout_marginBottom="8dp"
             android:hint="@string/settings_model_report_key"
-            app:hintTextColor="@color/text_secondary">
+            app:hintTextColor="?android:attr/textColorSecondary">
 
             <com.google.android.material.textfield.TextInputEditText
                 android:id="@+id/etModelReportKey"
@@ -196,8 +196,8 @@
                 android:layout_height="wrap_content"
                 android:inputType="text"
                 android:singleLine="true"
-                android:textColor="@color/text_primary"
-                android:textColorHint="@color/text_secondary" />
+                android:textColor="?attr/colorOnSurface"
+                android:textColorHint="?android:attr/textColorSecondary" />
         </com.google.android.material.textfield.TextInputLayout>
     </LinearLayout>
 </ScrollView>

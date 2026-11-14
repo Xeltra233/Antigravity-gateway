@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "updatedAt": "2026-11-14T21:56:03+08:00",
+  "presets": [
+    {
+      "id": "dark-silk-default",
+      "label": "暗调丝绸（默认）",
+      "zoom": 4.8,
+      "fold": 18.0,
+      "churn": 0.48,
+      "rim": 0.52,
+      "contrast": 1.07,
+      "speed": 0.91,
+      "hash": "z=4.80,f=18.0,c=0.48,r=0.52,k=1.07,s=0.91"
+    }
+  ]
+}

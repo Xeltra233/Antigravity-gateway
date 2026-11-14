@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=420,initial-scale=1">
+<title>Antigravity Gateway · 极简留白</title>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    margin:0;display:grid;place-items:center;min-height:100%;
+    background:#e9eaee;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;
+  }
+
+  .phone{
+    position:relative;width:420px;height:932px;overflow:hidden;
+    background:
+      radial-gradient(130% 70% at 50% -10%, #ffffff 0%, #fcfcfd 46%, #f6f7f9 100%);
+    color:#17181c;
+  }
+
+  .scroll{
+    position:relative;height:100%;overflow-y:auto;
+    display:flex;flex-direction:column;
+    padding:60px 27px 26px;
+  }
+  .scroll::-webkit-scrollbar{width:0}
+
+  /* ---------- 标题 ---------- */
+  h1{
+    margin:0 0 64px;text-align:center;
+    font-size:24px;font-weight:700;letter-spacing:.6px;
+  }
+
+  /* ---------- 状态 ---------- */
+  .status{display:flex;align-items:center;gap:16px;margin-bottom:80px}
+  .status .info{min-width:0;flex:1}
+  .status .line1{display:flex;align-items:center;gap:11px}
+  .dot{
+    width:9px;height:9px;border-radius:50%;flex:none;
+    background:#2bb89a;
+    box-shadow:0 0 0 4px rgba(43,184,154,.13);
+  }
+  .status b{font-size:19.5px;font-weight:700;letter-spacing:.3px}
+  .status .sub{
+    margin:7px 0 0 20px;
+    font-size:13.5px;font-weight:400;color:#9ba0a8;letter-spacing:.1px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+
+  /* ---------- 开关 ---------- */
+  .sw{
+    position:relative;flex:none;
+    width:52px;height:27px;border:0;border-radius:14px;padding:0;
+    background:#2bb89a;cursor:pointer;transition:background .2s;
+  }
+  .sw i{
+    position:absolute;top:3px;left:3px;
+    width:21px;height:21px;border-radius:50%;background:#fff;
+    box-shadow:0 1px 3px rgba(23,24,28,.18);
+    transition:transform .2s cubic-bezier(.3,.8,.4,1);
+  }
+  .sw.on i{transform:translateX(25px)}
+  .sw.off{background:#dcdfe4}
+  .sw.off i{transform:translateX(0)}
+
+  /* ---------- 分组 ---------- */
+  .sec{
+    font-size:14.5px;font-weight:400;color:#b3b8c0;letter-spacing:.4px;
+    margin:0 0 8px 2px;
+  }
+
+  .list{display:block;margin:0 0 44px}
+  .row{
+    position:relative;display:flex;align-items:center;gap:14px;
+    height:62px;padding:0 2px;text-decoration:none;color:inherit;
+    cursor:pointer;
+  }
+  .row .k{font-size:17px;font-weight:400;letter-spacing:.2px;flex:none}
+  .row .v{
+    margin-left:auto;font-size:17px;font-weight:400;letter-spacing:.1px;
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+    max-width:62%;
+  }
+  .row .v.mask{letter-spacing:2px;font-size:13.5px;color:#3a3d44}
+  .row .v.url{font-size:15px;color:#3a3d44}
+  .row .chev{width:17px;height:17px;flex:none;opacity:.85}
+
+  .hr{
+    height:1px;background:#eceded;margin:0 2px 44px;
+  }
+
+  /* ---------- 主按钮 ---------- */
+  .primary{
+    margin-top:auto;flex:none;
+    height:56px;border:0;border-radius:28px;
+    background:#17181c;color:#fff;
+    font-size:17px;font-weight:600;letter-spacing:1.2px;
+    cursor:pointer;
+    box-shadow:0 6px 18px rgba(23,24,28,.16);
+    transition:transform .16s, box-shadow .16s;
+  }
+  .primary:active{transform:scale(.985);box-shadow:0 3px 10px rgba(23,24,28,.18)}
+
+  /* hover / focus 提示，仅桌面预览用 */
+  .row:hover .k{color:#000}
+  .row:active{background:#f2f3f6;border-radius:8px}
+  .sw:focus-visible,.primary:focus-visible{outline:2px solid #2bb89a;outline-offset:3px}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="scroll">
+
+    <h1>本地 API 网关</h1>
+
+    <div class="status">
+      <div class="info">
+        <div class="line1"><i class="dot"></i><b>运行中</b></div>
+        <div class="sub">服务已启动，监听 127.0.0.1:7890</div>
+      </div>
+      <button class="sw on" id="runSw" aria-label="运行状态"><i></i></button>
+    </div>
+
+    <div class="sec">基本设置</div>
+    <div class="list">
+      <a class="row">
+        <span class="k">监听地址</span>
+        <span class="v">127.0.0.1</span>
+        <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="#c6cad1" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 5.5 16 12l-6.5 6.5"/></svg>
+      </a>
+      <a class="row">
+        <span class="k">监听端口</span>
+        <span class="v">7890</span>
+        <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="#c6cad1" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 5.5 16 12l-6.5 6.5"/></svg>
+      </a>
+      <a class="row">
+        <span class="k">访问密钥</span>
+        <span class="v mask">••••••••</span>
+        <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="#c6cad1" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 5.5 16 12l-6.5 6.5"/></svg>
+      </a>
+    </div>
+
+    <div class="hr"></div>
+
+    <div class="sec">高级设置</div>
+    <div class="list">
+      <a class="row">
+        <span class="k">代理模式</span>
+        <span class="v">智能代理</span>
+        <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="#c6cad1" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 5.5 16 12l-6.5 6.5"/></svg>
+      </a>
+      <a class="row">
+        <span class="k">上游地址</span>
+        <span class="v url">https://api.example.com</span>
+        <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="#c6cad1" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 5.5 16 12l-6.5 6.5"/></svg>
+      </a>
+      <a class="row">
+        <span class="k">缓存策略</span>
+        <span class="v">60 秒</span>
+        <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="#c6cad1" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 5.5 16 12l-6.5 6.5"/></svg>
+      </a>
+    </div>
+
+    <button class="primary">保存设置</button>
+
+  </div>
+</div>
+
+<script>
+  const sw = document.getElementById('runSw');
+  sw.addEventListener('click', () => {
+    const on = sw.classList.toggle('on');
+    sw.classList.toggle('off', !on);
+    document.querySelector('.status .sub').textContent =
+      on ? '服务已启动，监听 127.0.0.1:7890' : '服务已停止';
+    document.querySelector('.dot').style.background = on ? '#2bb89a' : '#c8ccd3';
+    document.querySelector('.dot').style.boxShadow =
+      on ? '0 0 0 4px rgba(43,184,154,.13)' : '0 0 0 4px rgba(200,204,211,.16)';
+  });
+</script>
+</body>
+</html>

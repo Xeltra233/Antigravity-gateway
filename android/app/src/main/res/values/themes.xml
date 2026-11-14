@@ -1,22 +1,130 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- DayNight theme with explicit semantic colors so text stays readable in both modes -->
-    <style name="Theme.AntigravityGateway" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <item name="colorPrimary">@color/primary</item>
-        <item name="colorPrimaryVariant">@color/primary_dark</item>
-        <item name="colorPrimaryDark">@color/primary_dark</item>
-        <item name="android:statusBarColor">@color/primary_dark</item>
-        <item name="colorOnPrimary">@color/on_primary</item>
-        <item name="colorSecondary">@color/accent</item>
-        <item name="colorAccent">@color/accent</item>
-        <item name="colorSurface">@color/surface</item>
-        <item name="colorOnSurface">@color/text_primary</item>
-        <item name="colorOnBackground">@color/text_primary</item>
-        <item name="colorError">@color/error</item>
-        <item name="android:colorBackground">@color/background</item>
-        <item name="android:windowBackground">@color/background</item>
-        <item name="android:textColorPrimary">@color/text_primary</item>
-        <item name="android:textColorSecondary">@color/text_secondary</item>
-        <item name="android:textColorHint">@color/text_secondary</item>
+
+    <!--
+      Four user skins. The app never follows the system night mode: the palette lives
+      entirely in these themes so the visible skin always matches the stored choice.
+      Palette values mirror docs/app-preview.html.
+    -->
+
+    <!-- 极简白 -->
+    <style name="Theme.AntigravityGateway" parent="Theme.MaterialComponents.Light.NoActionBar">
+        <item name="colorPrimary">#17181C</item>
+        <item name="colorPrimaryVariant">#FBFBFC</item>
+        <item name="colorPrimaryDark">#FBFBFC</item>
+        <item name="colorOnPrimary">#FFFFFF</item>
+        <item name="colorSecondary">#2BB89A</item>
+        <item name="colorAccent">#2BB89A</item>
+        <item name="colorSurface">#FBFBFC</item>
+        <item name="colorOnSurface">#17181C</item>
+        <item name="colorOnBackground">#17181C</item>
+        <item name="colorError">#D93025</item>
+        <item name="android:colorBackground">#FBFBFC</item>
+        <item name="android:windowBackground">#FBFBFC</item>
+        <item name="android:statusBarColor">#FBFBFC</item>
+        <item name="android:navigationBarColor">#FBFBFC</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:textColorPrimary">#17181C</item>
+        <item name="android:textColorSecondary">#767D87</item>
+        <item name="android:textColorHint">#8B9199</item>
+        <item name="agwLink">#2B8F7C</item>
+        <item name="agwLogBg">#F3F4F7</item>
+        <item name="agwSuccess">#2BB89A</item>
+        <item name="agwCardBorder">#ECEEF1</item>
+        <item name="agwFieldStroke">#ECEEF1</item>
+        <item name="agwFieldStrokeWidth">1dp</item>
+        <item name="agwFieldStrokeWidthFocused">1.6dp</item>
+        <item name="agwTopBar">#FBFBFC</item>
     </style>
+
+    <!-- 极简黑 -->
+    <style name="Theme.AntigravityGateway.MinDark" parent="Theme.MaterialComponents.NoActionBar">
+        <item name="colorPrimary">#ECEEF3</item>
+        <item name="colorPrimaryVariant">#0F1013</item>
+        <item name="colorPrimaryDark">#0F1013</item>
+        <item name="colorOnPrimary">#111216</item>
+        <item name="colorSecondary">#2FCFAE</item>
+        <item name="colorAccent">#2FCFAE</item>
+        <item name="colorSurface">#0F1013</item>
+        <item name="colorOnSurface">#ECEEF3</item>
+        <item name="colorOnBackground">#ECEEF3</item>
+        <item name="colorError">#FF8B84</item>
+        <item name="android:colorBackground">#0F1013</item>
+        <item name="android:windowBackground">#0F1013</item>
+        <item name="android:statusBarColor">#0F1013</item>
+        <item name="android:navigationBarColor">#0F1013</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:textColorPrimary">#ECEEF3</item>
+        <item name="android:textColorSecondary">#A8AEB9</item>
+        <item name="android:textColorHint">#7D838E</item>
+        <item name="agwLink">#3FD4B4</item>
+        <item name="agwLogBg">#181A1F</item>
+        <item name="agwSuccess">#2FCFAE</item>
+        <item name="agwCardBorder">#23252B</item>
+        <item name="agwFieldStroke">#2C2F36</item>
+        <item name="agwFieldStrokeWidth">1dp</item>
+        <item name="agwFieldStrokeWidthFocused">1.6dp</item>
+        <item name="agwTopBar">#0F1013</item>
+    </style>
+
+    <!-- 手绘线稿 -->
+    <style name="Theme.AntigravityGateway.Skc" parent="Theme.MaterialComponents.Light.NoActionBar">
+        <item name="colorPrimary">#A8C6EE</item>
+        <item name="colorPrimaryVariant">#E4DCCB</item>
+        <item name="colorPrimaryDark">#E4DCCB</item>
+        <item name="colorOnPrimary">#232A36</item>
+        <item name="colorSecondary">#7DBF45</item>
+        <item name="colorAccent">#7DBF45</item>
+        <item name="colorSurface">#E4DCCB</item>
+        <item name="colorOnSurface">#3A4150</item>
+        <item name="colorOnBackground">#3A4150</item>
+        <item name="colorError">#B23B2E</item>
+        <item name="android:colorBackground">#E4DCCB</item>
+        <item name="android:windowBackground">#E4DCCB</item>
+        <item name="android:statusBarColor">#E4DCCB</item>
+        <item name="android:navigationBarColor">#E4DCCB</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:textColorPrimary">#3A4150</item>
+        <item name="android:textColorSecondary">#6F7787</item>
+        <item name="android:textColorHint">#8D8578</item>
+        <item name="agwLink">#3F5C86</item>
+        <item name="agwLogBg">#EFE6CF</item>
+        <item name="agwSuccess">#5F9E2E</item>
+        <item name="agwCardBorder">#3A4150</item>
+        <item name="agwFieldStroke">#2E2B28</item>
+        <item name="agwFieldStrokeWidth">1.6dp</item>
+        <item name="agwFieldStrokeWidthFocused">2dp</item>
+        <item name="agwTopBar">#E4DCCB</item>
+    </style>
+
+    <!-- 丝绸缎面 -->
+    <style name="Theme.AntigravityGateway.Acr" parent="Theme.MaterialComponents.NoActionBar">
+        <item name="colorPrimary">#2A3D66</item>
+        <item name="colorPrimaryVariant">#0A1220</item>
+        <item name="colorPrimaryDark">#0A1220</item>
+        <item name="colorOnPrimary">#EEF2FA</item>
+        <item name="colorSecondary">#7AA2FF</item>
+        <item name="colorAccent">#7AA2FF</item>
+        <item name="colorSurface">#0A1220</item>
+        <item name="colorOnSurface">#EEF2FA</item>
+        <item name="colorOnBackground">#EEF2FA</item>
+        <item name="colorError">#FF8B84</item>
+        <item name="android:colorBackground">#04060B</item>
+        <item name="android:windowBackground">#04060B</item>
+        <item name="android:statusBarColor">#04060B</item>
+        <item name="android:navigationBarColor">#04060B</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:textColorPrimary">#EEF2FA</item>
+        <item name="android:textColorSecondary">#A6B2C9</item>
+        <item name="android:textColorHint">#7D8BA5</item>
+        <item name="agwLink">#9DB9FF</item>
+        <item name="agwLogBg">#0A1020</item>
+        <item name="agwSuccess">#4ECFAE</item>
+        <item name="agwCardBorder">#1E2A44</item>
+        <item name="agwFieldStroke">#243250</item>
+        <item name="agwFieldStrokeWidth">1dp</item>
+        <item name="agwFieldStrokeWidthFocused">1.6dp</item>
+        <item name="agwTopBar">#A604060B</item>
+    </style>
+
 </resources>

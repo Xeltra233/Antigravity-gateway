@@ -27,14 +27,14 @@
             android:layout_height="wrap_content"
             android:textSize="15sp"
             android:textStyle="bold"
-            android:textColor="@color/text_primary" />
+            android:textColor="?attr/colorOnSurface" />
 
         <TextView
             android:id="@+id/tvProviderUrlHost"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textSize="12sp"
-            android:textColor="@color/text_secondary" />
+            android:textColor="?android:attr/textColorSecondary" />
     </LinearLayout>
 
     <ImageButton

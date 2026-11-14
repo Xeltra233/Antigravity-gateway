@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Silk Fold Backdrop — 渲染预览</title>
+<style>
+  :root{
+    --frame-w: 100%;
+    --panel: rgba(24,27,36,.60);
+    --panel-line: rgba(255,255,255,.15);
+    --text: rgba(255,255,255,.96);
+    --text-dim: rgba(255,255,255,.52);
+    --accent: #4ADE80;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:#04060B;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    color:var(--text);overflow:hidden;
+  }
+
+  #stage{
+    position:fixed;top:0;left:50%;transform:translateX(-50%);
+    width:var(--frame-w);height:100%;
+    background:#04060B;overflow:hidden;
+  }
+  canvas{display:block;width:100%;height:100%}
+
+  #ui{
+    position:fixed;top:0;left:50%;transform:translateX(-50%);
+    width:var(--frame-w);height:100%;
+    overflow-y:auto;overscroll-behavior:contain;
+    padding:14px 16px 30px;
+    transition:opacity .25s ease;
+  }
+  #ui.hidden{opacity:0;pointer-events:none}
+
+  .topbar{display:flex;align-items:center;height:56px;gap:8px}
+  .topbar .title{flex:1;text-align:center;font-size:19px;font-weight:700;letter-spacing:-.2px}
+  .icon-btn{
+    width:40px;height:40px;display:grid;place-items:center;border:0;background:none;
+    color:rgba(255,255,255,.7);cursor:pointer;border-radius:12px;
+  }
+  .icon-btn:hover{background:rgba(255,255,255,.07)}
+  .icon-btn svg{width:22px;height:22px;fill:currentColor}
+
+  .card{
+    background:var(--panel);
+    border:1px solid var(--panel-line);
+    border-radius:20px;
+    backdrop-filter:blur(26px) saturate(1.5);
+    -webkit-backdrop-filter:blur(26px) saturate(1.5);
+    box-shadow:0 10px 34px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.10);
+  }
+
+  .status{display:flex;align-items:center;gap:14px;padding:18px;margin-top:8px}
+  .dot{
+    width:11px;height:11px;border-radius:50%;background:var(--accent);
+    box-shadow:0 0 0 5px rgba(74,222,128,.16), 0 0 16px rgba(74,222,128,.8);
+    flex:0 0 auto;
+  }
+  .status .body{flex:1;min-width:0}
+  .status .name{font-size:17px;font-weight:700}
+  .status .hint{font-size:13px;color:var(--text-dim);margin-top:2px}
+
+  .switch{
+    width:50px;height:30px;border-radius:999px;background:rgba(255,255,255,.13);
+    position:relative;border:1px solid rgba(255,255,255,.18);flex:0 0 auto;
+  }
+  .switch::after{
+    content:"";position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;
+    background:#fff;transition:transform .2s cubic-bezier(.3,1.3,.5,1);
+    box-shadow:0 1px 4px rgba(0,0,0,.45);
+  }
+  .switch.on{background:rgba(74,140,240,.7);border-color:rgba(150,195,255,.5)}
+  .switch.on::after{transform:translateX(20px)}
+
+  .section{margin:26px 0 10px;padding-left:4px;font-size:16px;font-weight:700;color:rgba(255,255,255,.82)}
+  .group{padding:2px 18px}
+  .row{display:flex;align-items:center;gap:13px;padding:15px 0}
+  .row + .row{border-top:1px solid rgba(255,255,255,.06)}
+  .row .ico{width:22px;height:22px;flex:0 0 auto;fill:rgba(255,255,255,.55)}
+  .row .label{flex:1;min-width:0}
+  .row .label .t{font-size:16px}
+  .row .label .s{font-size:12px;color:rgba(255,255,255,.44);margin-top:2px}
+  .row .v{font-size:15px;color:rgba(255,255,255,.82);white-space:nowrap}
+  .row .chev{width:17px;height:17px;flex:0 0 auto;fill:rgba(255,255,255,.3)}
+
+  .primary{
+    display:grid;place-items:center;height:56px;margin-top:26px;border-radius:20px;
+    background:rgba(255,255,255,.06);
+    border:1px solid rgba(255,255,255,.22);
+    backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+    font-size:16px;cursor:pointer;
+  }
+  .primary:hover{background:rgba(255,255,255,.11)}
+
+  #dock{
+    position:fixed;right:12px;bottom:12px;width:248px;
+    padding:14px;border-radius:16px;
+    background:rgba(9,12,18,.84);
+    border:1px solid rgba(255,255,255,.13);
+    backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);
+    font-size:12px;color:rgba(255,255,255,.68);
+    box-shadow:0 14px 44px rgba(0,0,0,.6);
+    z-index:10;
+  }
+  #dock.collapsed .dock-body{display:none}
+  .dock-head{display:flex;align-items:center;justify-content:space-between;
+    font-size:13px;font-weight:600;color:rgba(255,255,255,.9);cursor:pointer}
+  .dock-head .caret{font-size:10px;opacity:.55;transition:transform .2s}
+  #dock.collapsed .caret{transform:rotate(-90deg)}
+  .dock-body{margin-top:12px;display:grid;gap:10px}
+  .ctl{display:grid;gap:5px}
+  .ctl .k{display:flex;justify-content:space-between;color:rgba(255,255,255,.5)}
+  .ctl .k b{font-weight:600;color:rgba(255,255,255,.88);font-variant-numeric:tabular-nums}
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;width:100%;height:3px;border-radius:2px;
+    background:rgba(255,255,255,.18);outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:13px;height:13px;border-radius:50%;
+    background:#fff;box-shadow:0 1px 5px rgba(0,0,0,.5);cursor:pointer;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:13px;height:13px;border:0;border-radius:50%;background:#fff;cursor:pointer;
+  }
+  .toggles{display:flex;gap:7px}
+  .chip{
+    flex:1;text-align:center;padding:7px 4px;border-radius:9px;
+    background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);
+    cursor:pointer;user-select:none;transition:.15s;font-size:11.5px;
+  }
+  .chip:hover{background:rgba(255,255,255,.12)}
+  .chip.active{background:rgba(96,165,250,.26);border-color:rgba(147,197,253,.55);color:#fff}
+  .meta{
+    margin-top:9px;padding-top:9px;border-top:1px solid rgba(255,255,255,.09);
+    font-size:11px;color:rgba(255,255,255,.36);line-height:1.5;
+  }
+  .paramstr{
+    margin-top:9px;padding:6px 8px;border-radius:8px;cursor:pointer;
+    font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    font-size:11px;line-height:1.55;letter-spacing:.15px;word-break:break-all;
+    color:#8ea0bf;background:rgba(255,255,255,.05);
+    border:1px solid rgba(255,255,255,.09);
+    user-select:all;transition:background .15s,color .15s;
+  }
+  .paramstr:hover{background:rgba(255,255,255,.1);color:#c8d6ef}
+  .paramstr.copied{color:#86e0a8;border-color:rgba(134,224,168,.5)}
+
+  @media (min-width:620px){
+    :root{--frame-w:420px}
+    #stage{box-shadow:0 0 0 1px rgba(255,255,255,.07), 0 30px 90px rgba(0,0,0,.8)}
+  }
+  @media (min-width:780px){
+    #dock{right:auto;left:calc(50% + 210px + 18px);bottom:20px}
+  }
+  @media (max-width:519px){
+    #dock{right:8px;left:8px;bottom:8px;width:auto}
+  }
+</style>
+</head>
+<body>
+
+<div id="stage"><canvas id="bg"></canvas></div>
+
+<div id="ui">
+  <div class="topbar">
+    <button class="icon-btn" aria-label="返回">
+      <svg viewBox="0 0 24 24"><path d="M15.41 7.41 14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+    </button>
+    <div class="title">本地 API 网关</div>
+    <button class="icon-btn" aria-label="设置">
+      <svg viewBox="0 0 24 24"><path d="M19.14 12.94a7.5 7.5 0 0 0 .05-.94 7.5 7.5 0 0 0-.05-.94l2.03-1.58a.5.5 0 0 0 .12-.62l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.3 7.3 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.58.24-1.12.55-1.62.94l-2.39-.96a.5.5 0 0 0-.6.22L2.7 8.86a.5.5 0 0 0 .12.62l2.03 1.58c-.03.31-.05.62-.05.94s.02.63.05.94l-2.03 1.58a.5.5 0 0 0-.12.62l1.92 3.32c.13.22.39.3.6.22l2.39-.96c.5.39 1.04.7 1.62.94l.36 2.54c.04.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.58-.24 1.12-.55 1.62-.94l2.39.96c.22.08.47 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.62zM12 15.5A3.5 3.5 0 1 1 15.5 12 3.5 3.5 0 0 1 12 15.5z"/></svg>
+    </button>
+  </div>
+
+  <div class="card status">
+    <div class="dot"></div>
+    <div class="body">
+      <div class="name">运行中</div>
+      <div class="hint">服务已启动，正在监听 127.0.0.1:7890</div>
+    </div>
+    <div class="switch on"></div>
+  </div>
+
+  <div class="section">基本设置</div>
+  <div class="card group">
+    <div class="row">
+      <svg class="ico" viewBox="0 0 24 24"><path d="M4 5h16a1 1 0 0 1 1 1v4H3V6a1 1 0 0 1 1-1zm-1 7h18v4H3v-4zm0 6h18v1a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-1z"/></svg>
+      <div class="label"><div class="t">监听地址</div><div class="s">绑定网卡地址</div></div>
+      <div class="v">127.0.0.1</div>
+      <svg class="chev" viewBox="0 0 24 24"><path d="M8.59 16.59 10 18l6-6-6-6-1.41 1.41L13.17 12z"/></svg>
+    </div>
+    <div class="row">
+      <svg class="ico" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm0 1.8c1.3 0 2.5 1.2 3.3 3.1H8.7C9.5 4.9 10.7 3.8 12 3.8zM4.3 8.9h2.2a17 17 0 0 0 0 6.2H4.3a8.3 8.3 0 0 1 0-6.2zm.9 7.8h2.7c.2.9.5 1.7.9 2.4a8.3 8.3 0 0 1-3.6-2.4zm2.7-8.4H5.2a8.3 8.3 0 0 1 3.6-2.4 11 11 0 0 0-.9 2.4zm3.5 10.1c-.9-.7-1.6-2.1-1.9-3.6h3.8c-.3 1.5-1 2.9-1.9 3.6zm2.4-5.4H8.2a15 15 0 0 1 0-6.2h5.6a15 15 0 0 1 0 6.2zm.2 5.4c.9-.7 1.6-2.1 1.9-3.6h3.8c-.3 1.5-1 2.9-1.9 3.6zm.6-11.1c.4-.7.7-1.5.9-2.4a8.3 8.3 0 0 1 3.6 2.4h-4.5zM17.5 15h2.2a17 17 0 0 0 0-6.2h-2.2a14 14 0 0 1 0 6.2zm.3 3.8a11 11 0 0 0 .9-2.4h2.7a8.3 8.3 0 0 1-3.6 2.4z"/></svg>
+      <div class="label"><div class="t">监听端口</div><div class="s">HTTP 服务端口</div></div>
+      <div class="v">7890</div>
+      <svg class="chev" viewBox="0 0 24 24"><path d="M8.59 16.59 10 18l6-6-6-6-1.41 1.41L13.17 12z"/></svg>
+    </div>
+    <div class="row">
+      <svg class="ico" viewBox="0 0 24 24"><path d="M12 2 4 5.6v5.5c0 4.9 3.4 9.5 8 10.9 4.6-1.4 8-6 8-10.9V5.6L12 2zm-1.2 13.6-3.2-3.2 1.4-1.4 1.8 1.8 4-4 1.4 1.4-5.4 5.4z"/></svg>
+      <div class="label"><div class="t">访问密钥</div><div class="s">下游客户端鉴权</div></div>
+      <div class="v">••••••••</div>
+    </div>
+  </div>
+
+  <div class="section">高级设置</div>
+  <div class="card group">
+    <div class="row">
+      <svg class="ico" viewBox="0 0 24 24"><path d="M19.14 12.94a7.5 7.5 0 0 0 .05-.94 7.5 7.5 0 0 0-.05-.94l2.03-1.58a.5.5 0 0 0 .12-.62l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.3 7.3 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.58.24-1.12.55-1.62.94l-2.39-.96a.5.5 0 0 0-.6.22L2.7 8.86a.5.5 0 0 0 .12.62l2.03 1.58c-.03.31-.05.62-.05.94s.02.63.05.94l-2.03 1.58a.5.5 0 0 0-.12.62l1.92 3.32c.13.22.39.3.6.22l2.39-.96c.5.39 1.04.7 1.62.94l.36 2.54c.04.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.58-.24 1.12-.55 1.62-.94l2.39.96c.22.08.47 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.62zM12 15.5A3.5 3.5 0 1 1 15.5 12 3.5 3.5 0 0 1 12 15.5z"/></svg>
+      <div class="label"><div class="t">代理模式</div><div class="s">上游连接方式</div></div>
+      <div class="v">智能代理</div>
+      <svg class="chev" viewBox="0 0 24 24"><path d="M8.59 16.59 10 18l6-6-6-6-1.41 1.41L13.17 12z"/></svg>
+    </div>
+    <div class="row">
+      <svg class="ico" viewBox="0 0 24 24"><path d="M12 3C7 3 3 4.6 3 6.5v11C3 19.4 7 21 12 21s9-1.6 9-3.5v-11C21 4.6 17 3 12 3zm0 1.8c4.2 0 7.2 1.2 7.2 1.7S16.2 8.2 12 8.2 4.8 7 4.8 6.5 7.8 4.8 12 4.8zm7.2 12.7c0 .5-3 1.7-7.2 1.7s-7.2-1.2-7.2-1.7v-2.1c1.7.8 4.4 1.3 7.2 1.3s5.5-.5 7.2-1.3v2.1zm0-4.5c0 .5-3 1.7-7.2 1.7s-7.2-1.2-7.2-1.7v-2.1c1.7.8 4.4 1.3 7.2 1.3s5.5-.5 7.2-1.3v2.1z"/></svg>
+      <div class="label"><div class="t">上游地址</div><div class="s">API 基地址</div></div>
+      <div class="v">api.example.com</div>
+      <svg class="chev" viewBox="0 0 24 24"><path d="M8.59 16.59 10 18l6-6-6-6-1.41 1.41L13.17 12z"/></svg>
+    </div>
+    <div class="row">
+      <svg class="ico" viewBox="0 0 24 24"><path d="M12 5V2L8 6l4 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z"/></svg>
+      <div class="label"><div class="t">缓存策略</div><div class="s">响应缓存时长</div></div>
+      <div class="v">60 秒</div>
+    </div>
+  </div>
+
+  <div class="primary">保存设置</div>
+</div>
+
+<div id="dock">
+  <div class="dock-head" id="dockHead">
+    渲染参数 <span class="caret">▾</span>
+  </div>
+  <div class="dock-body">
+    <div class="ctl">
+      <div class="k"><span>流动速度</span><b id="vSpeed">0.91×</b></div>
+      <input type="range" id="rSpeed" min="0" max="300" value="91">
+    </div>
+    <div class="ctl">
+      <div class="k"><span>褶皱尺度</span><b id="vZoom">4.80×</b></div>
+      <input type="range" id="rZoom" min="10" max="500" value="480">
+    </div>
+    <div class="ctl">
+      <div class="k"><span>褶皱合并</span><b id="vFold">18.0</b></div>
+      <input type="range" id="rFold" min="0" max="240" value="180">
+    </div>
+    <div class="ctl">
+      <div class="k"><span>翻滚强度</span><b id="vChurn">0.48</b></div>
+      <input type="range" id="rChurn" min="0" max="300" value="48">
+    </div>
+    <div class="ctl">
+      <div class="k"><span>高光强度</span><b id="vRim">0.52</b></div>
+      <input type="range" id="rRim" min="0" max="250" value="52">
+    </div>
+    <div class="ctl">
+      <div class="k"><span>对比</span><b id="vContrast">1.07</b></div>
+      <input type="range" id="rContrast" min="30" max="220" value="107">
+    </div>
+    <div class="toggles">
+      <div class="chip active" id="cPanel">面板</div>
+      <div class="chip" id="cPause">暂停</div>
+      <div class="chip" id="cShot">存图</div>
+    </div>
+    <div class="paramstr" id="pstr" title="点击复制当前参数">—</div>
+    <div class="meta" id="fps">—</div>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  const canvas = document.getElementById('bg');
+  const gl = canvas.getContext('webgl', {
+    alpha: false, antialias: false, depth: false, stencil: false,
+    powerPreference: 'high-performance', preserveDrawingBuffer: true,
+  });
+  if (!gl) {
+    document.body.innerHTML =
+      '<div style="padding:40px;font:15px/1.7 sans-serif;color:#c9d3e5">此浏览器不支持 WebGL，无法渲染背景。</div>';
+    return;
+  }
+
+  const VERT = `
+    attribute vec2 aPos;
+    void main() { gl_Position = vec4(aPos, 0.0, 1.0); }
+  `;
+
+  const FRAG = `
+    precision highp float;
+
+    uniform vec2  uRes;
+    uniform float uTime;
+    uniform float uZoom;
+    uniform float uRim;
+    uniform float uContrast;
+    uniform float uChurn;
+    uniform float uFold;
+
+    // ---------------------------------------------------------------------
+    // Silk fold field.
+    // Original algorithm: Giorgi Azmaipharashvili, https://www.shadertoy.com/view/X3yXRd
+    // MIT License, copyright (c) 2024 Giorgi Azmaipharashvili.
+    // ---------------------------------------------------------------------
+    float noise(vec2 p) {
+      return smoothstep(-0.5, 0.9, sin((p.x - p.y) * 555.0) * sin(p.y * 1444.0)) - 0.4;
+    }
+
+    float fabric(vec2 p) {
+      const mat2 m = mat2(1.6, 1.2, -1.2, 1.6);
+      float f = 0.4 * noise(p);
+      f += 0.3 * noise(p = m * p);
+      f += 0.2 * noise(p = m * p);
+      return f + 0.1 * noise(m * p);
+    }
+
+    float silk(vec2 uv, float t, float grain, float fold) {
+      float s = sin(5.0 * (uv.x + uv.y)
+                  + fold * cos(2.0 * uv.x + 5.0 * uv.y)
+                  + sin(12.0 * (uv.x + uv.y)) - t);
+      s = 0.7 + 0.3 * (s * s * 0.5 + s);
+      s *= 0.95 + 0.18 * fabric(uv * grain * 0.32);
+      return s * 0.9 + 0.1;
+    }
+
+    // Closed-form slope of the same field; drives the specular ridge.
+    float silkd(vec2 uv, float t, float fold) {
+      float xy = uv.x + uv.y;
+      float d = (5.0 - 2.0 * fold * sin(2.0 * uv.x + 5.0 * uv.y) + 12.0 * cos(12.0 * xy))
+              * cos(5.0 * xy + fold * cos(2.0 * uv.x + 5.0 * uv.y)
+                    + sin(12.0 * xy) - t);
+      return 0.004 * d * (sign(d) + 3.0);
+    }
+    // ---------------------------------------------------------------------
+
+    void main() {
+      vec2 frag = gl_FragCoord.xy;
+      float grain = min(uRes.x, uRes.y);
+      float base = max(uRes.x, uRes.y);
+
+      // Centred crop so a tall phone screen shows the folds at a sane size
+      // instead of a slice of one giant ripple.
+      vec2 uv = (frag - 0.5 * uRes) / base * 2.0 + 0.5;
+      uv /= uZoom;
+
+      float t = uTime;
+
+      // Large-scale stir. The sheet is dragged in both axes at different
+      // rates, so folds travel across the surface and roll over each other
+      // instead of breathing in place.
+      vec2 q = uv;
+      q += uChurn * 0.17 * vec2(
+            sin(uv.y * 2.30 + t * 0.52) + 0.45 * sin(uv.y * 4.10 - t * 0.34),
+            cos(uv.x * 2.05 - t * 0.47) + 0.45 * cos(uv.x * 3.65 + t * 0.29));
+
+      // Widened version of the original wind shear: each crest lifts further.
+      q.y += uChurn * 0.078 * sin(7.0 * q.x - t);
+
+      // The phase walks at a slightly different rate in different regions.
+      // That rate difference is what turns a slide into a roll; the average
+      // pace stays where it was.
+      float tp = t * (1.0 + 0.40 * uChurn * sin(q.x * 2.55 + q.y * 1.85 + t * 0.21));
+
+      float s = sqrt(max(silk(q, tp, grain, uFold), 0.0));
+      float d = silkd(q, tp, uFold);
+
+      // Tonal value directly from the field, then the analytic slope adds a
+      // lit shoulder on one side of each fold and shade on the other.
+      float v = clamp((s - 0.58) * 1.55, 0.0, 1.0);
+      v = clamp(v + d * 0.85 * uRim, 0.0, 1.0);
+      v = pow(v, 1.22);
+      v = clamp((v - 0.5) * uContrast + 0.5, 0.0, 1.0);
+
+      // Cool palette: near-black valleys, blue mid-tones, cold white crests.
+      vec3 cVoid  = vec3(0.010, 0.016, 0.038);
+      vec3 cDeep  = vec3(0.042, 0.072, 0.160);
+      vec3 cMid   = vec3(0.160, 0.235, 0.420);
+      vec3 cLit   = vec3(0.430, 0.530, 0.750);
+      vec3 cCrest = vec3(0.820, 0.875, 0.960);
+
+      vec3 col = mix(cVoid, cDeep, smoothstep(0.00, 0.52, v));
+      col = mix(col, cMid,   smoothstep(0.26, 0.76, v));
+      col = mix(col, cLit,   smoothstep(0.58, 0.94, v));
+      col = mix(col, cCrest, smoothstep(0.86, 1.00, v));
+
+      // Gentle corner falloff keeps the cards readable without a visible edge.
+      float vig = smoothstep(1.50, 0.30, length((frag / uRes - 0.5) * vec2(1.05, 1.0)) * 1.5);
+      col *= mix(0.55, 1.0, vig);
+
+      col = col / (col + 0.90) * 1.62;
+
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `;
+
+  function compile(type, src) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+      throw new Error(gl.getShaderInfoLog(s) || 'shader compile failed');
+    }
+    return s;
+  }
+
+  const prog = gl.createProgram();
+  gl.attachShader(prog, compile(gl.VERTEX_SHADER, VERT));
+  gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FRAG));
+  gl.linkProgram(prog);
+  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) {
+    throw new Error(gl.getProgramInfoLog(prog) || 'program link failed');
+  }
+  gl.useProgram(prog);
+
+  const buf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+    -1, -1, 1, -1, -1, 1,
+    -1, 1, 1, -1, 1, 1,
+  ]), gl.STATIC_DRAW);
+
+  const aPos = gl.getAttribLocation(prog, 'aPos');
+  gl.enableVertexAttribArray(aPos);
+  gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
+
+  const uRes = gl.getUniformLocation(prog, 'uRes');
+  const uTime = gl.getUniformLocation(prog, 'uTime');
+  const uZoom = gl.getUniformLocation(prog, 'uZoom');
+  const uRim = gl.getUniformLocation(prog, 'uRim');
+  const uChurn = gl.getUniformLocation(prog, 'uChurn');
+  const uFold = gl.getUniformLocation(prog, 'uFold');
+  const uContrast = gl.getUniformLocation(prog, 'uContrast');
+
+  let W = 1, H = 1;
+  let elapsed = 0, running = true, speedScale = 0.91;
+  let zoomAmt = 4.8, rimAmt = 0.52, contrastAmt = 1.07, churnAmt = 0.48, foldAmt = 18;
+  let lastFrame = 0, lastDraw = 0, frames = 0, fpsTimer = 0;
+
+  function resize() {
+    const rect = canvas.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    W = Math.max(1, Math.round(rect.width * dpr));
+    H = Math.max(1, Math.round(rect.height * dpr));
+    canvas.width = W;
+    canvas.height = H;
+    gl.viewport(0, 0, W, H);
+  }
+
+  function render() {
+    gl.uniform2f(uRes, W, H);
+    gl.uniform1f(uTime, elapsed);
+    gl.uniform1f(uZoom, zoomAmt);
+    gl.uniform1f(uChurn, churnAmt);
+    gl.uniform1f(uFold, foldAmt);
+    gl.uniform1f(uRim, rimAmt);
+    gl.uniform1f(uContrast, contrastAmt);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
+  }
+
+  function loop(now) {
+    requestAnimationFrame(loop);
+    if (!lastFrame) lastFrame = now;
+    const dt = Math.min(now - lastFrame, 100);
+    lastFrame = now;
+    if (running) elapsed += (dt / 1000) * speedScale;
+
+    if (now - lastDraw < 1000 / 40) return;
+    lastDraw = now;
+    render();
+
+    frames++;
+    if (now - fpsTimer > 500) {
+      const fps = (frames * 1000) / (now - fpsTimer);
+      document.getElementById('fps').textContent =
+        `${fps.toFixed(0)} fps · GL ${W}×${H}`;
+      frames = 0; fpsTimer = now;
+    }
+  }
+
+  const $ = id => document.getElementById(id);
+  $('dockHead').onclick = () => $('dock').classList.toggle('collapsed');
+
+  function refreshLabels() {
+    $('vSpeed').textContent = speedScale.toFixed(2) + '×';
+    $('vZoom').textContent = zoomAmt.toFixed(2) + '×';
+    $('vFold').textContent = foldAmt.toFixed(1);
+    $('vChurn').textContent = churnAmt.toFixed(2);
+    $('vRim').textContent = rimAmt.toFixed(2);
+    $('vContrast').textContent = contrastAmt.toFixed(2);
+    const s = `z=${zoomAmt.toFixed(2)} f=${foldAmt.toFixed(1)} c=${churnAmt.toFixed(2)} `
+            + `r=${rimAmt.toFixed(2)} k=${contrastAmt.toFixed(2)} s=${speedScale.toFixed(2)}`;
+    $('pstr').textContent = s;
+    try { history.replaceState(null, '', '#' + s.replace(/ /g, ',')); } catch (_) {}
+  }
+
+  const bind = (id, apply) => {
+    const el = $(id);
+    el.oninput = () => { apply(+el.value); refreshLabels(); };
+  };
+  bind('rSpeed',    v => speedScale = v / 100);
+  bind('rZoom',     v => zoomAmt = v / 100);
+  bind('rFold',     v => foldAmt = v / 10);
+  bind('rChurn',    v => churnAmt = v / 100);
+  bind('rRim',      v => rimAmt = v / 100);
+  bind('rContrast', v => contrastAmt = v / 100);
+
+  // Restore from the URL hash so a shared link reproduces the exact frame.
+  (() => {
+    const h = decodeURIComponent(location.hash.slice(1));
+    if (!h) { refreshLabels(); return; }
+    const p = new URLSearchParams(h.replace(/,/g, '&'));
+    const apply = (id, key, scale) => {
+      const raw = p.get(key);
+      if (raw === null || !$(id)) return;
+      $(id).value = String(Math.round(parseFloat(raw) * scale));
+      $(id).dispatchEvent(new Event('input'));
+    };
+    apply('rSpeed', 's', 100);
+    apply('rZoom', 'z', 100);
+    apply('rFold', 'f', 10);
+    apply('rChurn', 'c', 100);
+    apply('rRim', 'r', 100);
+    apply('rContrast', 'k', 100);
+    refreshLabels();
+  })();
+
+  $('pstr').onclick = () => {
+    const text = $('pstr').textContent;
+    const flash = () => {
+      $('pstr').classList.add('copied');
+      setTimeout(() => $('pstr').classList.remove('copied'), 900);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(flash, () => prompt('复制这段参数', text));
+    } else {
+      prompt('复制这段参数', text);
+    }
+  };
+
+  $('cPanel').onclick = e => {
+    e.target.classList.toggle('active');
+    $('ui').classList.toggle('hidden', !e.target.classList.contains('active'));
+  };
+  $('cPause').onclick = e => {
+    running = !running;
+    e.target.classList.toggle('active', !running);
+    e.target.textContent = running ? '暂停' : '继续';
+  };
+  $('cShot').onclick = () => {
+    render();
+    const a = document.createElement('a');
+    a.download = `silk-fold-${Date.now()}.png`;
+    a.href = canvas.toDataURL('image/png');
+    a.click();
+  };
+
+  window.addEventListener('resize', resize);
+  resize();
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
