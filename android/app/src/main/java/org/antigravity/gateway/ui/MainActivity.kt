@@ -10,6 +10,7 @@ import android.content.res.ColorStateList
 import android.graphics.Color
 import android.content.pm.ApplicationInfo
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.text.Editable
@@ -571,7 +572,7 @@ class MainActivity : AppCompatActivity() {
             }
             is TextView -> {
                 if (view.textSize >= headlinePx) {
-                    view.setTypeface(android.graphics.Typeface.create(view.typeface, HEAVY_WEIGHT, false))
+                    view.setTypeface(heavyTypeface(view.typeface))
                     view.setTextColor(SketchSpec.TEXT)
                 } else if (view.textSize >= bodyPx) {
                     view.setTextColor(SketchSpec.TEXT)
@@ -620,6 +621,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     /** Resolves a theme attribute so dynamic colors follow the active skin. */
+    /**
+     * Heaviest available face for headings.
+     *
+     * `Typeface.create(family, weight, italic)` is API 28 while the app still supports 26, so older
+     * devices fall back to the bold face rather than skipping the weight change entirely.
+     */
+    private fun heavyTypeface(base: android.graphics.Typeface): android.graphics.Typeface =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            android.graphics.Typeface.create(base, HEAVY_WEIGHT, false)
+        } else {
+            android.graphics.Typeface.create(base, android.graphics.Typeface.BOLD)
+        }
+
     private fun themeColor(attr: Int): Int {
         val value = android.util.TypedValue()
         if (!theme.resolveAttribute(attr, value, true)) return 0
