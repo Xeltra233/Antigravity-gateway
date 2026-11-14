@@ -43,6 +43,16 @@ jobs:
           go test -v -short ./...
           go vet ./...
 
+      - name: Cross-compile All Release Platforms
+        run: |
+          chmod +x scripts/build-matrix.sh
+          ./scripts/build-matrix.sh "$RUNNER_TEMP/matrix"
+
+      - name: Build Android JNI Libraries (4 ABIs)
+        run: |
+          chmod +x scripts/build-android-libs.sh
+          ./scripts/build-android-libs.sh
+
       - name: Run Android Lint
         working-directory: android
         run: |

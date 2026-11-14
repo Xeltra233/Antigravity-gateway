@@ -22,10 +22,19 @@ const (
 	RequestIDContextKey contextKey = "request_id"
 )
 
+// requestIDFormats keeps the tracing identifier from becoming a fixed-shape
+// signature on the wire. The value stays opaque and unique either way.
+var requestIDFormats = []string{"req_", "r-", "trace_", "call_"}
+
 func GenerateRequestID() string {
 	b := make([]byte, 12)
 	_, _ = rand.Read(b)
-	return "req_" + hex.EncodeToString(b)
+	format := requestIDFormats[0]
+	var pick [1]byte
+	if _, err := rand.Read(pick[:]); err == nil {
+		format = requestIDFormats[int(pick[0])%len(requestIDFormats)]
+	}
+	return format + hex.EncodeToString(b)
 }
 
 func GetKeyInfo(ctx context.Context) *keymgmt.KeyInfo {

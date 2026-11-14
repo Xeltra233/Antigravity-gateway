@@ -22,7 +22,7 @@ import (
 )
 
 var (
-	Version   = "1.0.13"
+	Version   = "1.0.15"
 	GitCommit = "none"
 	BuildTime = "unknown"
 )
@@ -161,6 +161,10 @@ func StartEngine(getenv func(string) string) (*Engine, error) {
 
 	upstreamClient := proxy.NewUpstreamClient(cfg)
 	orch := recovery.NewOrchestrator(cfg, upstreamClient, keyMgr)
+	if err := orch.AntiRouteError(); err != nil {
+		keyMgr.Close()
+		return nil, fmt.Errorf("anti-route configuration error: %w", err)
+	}
 	proxyHandler := proxy.NewProxyHandler(cfg, keyMgr, upstreamClient)
 	proxyHandler.SetChatHandler(orch.HandleChatCompletions)
 	adminHandler := keymgmt.NewAdminHandler(cfg.AdminAPIKey, keyMgr)

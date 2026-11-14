@@ -183,6 +183,14 @@ class MainActivity : AppCompatActivity() {
         // Theme mode switch (light / dark / follow-system chooser, top-right)
         binding.btnThemeMode.setOnClickListener { showThemeDialog() }
 
+        // Guard and model-report settings (top-right, next to the theme switch)
+        binding.btnSettings.setOnClickListener {
+            GuardSettingsSheet(this) { guard ->
+                viewModel.updateGuardSettings(guard)
+                Toast.makeText(this, R.string.settings_saved, Toast.LENGTH_SHORT).show()
+            }.show(viewModel.uiState.value.config.guard)
+        }
+
         // Provider switcher & rename
         binding.layoutProviderSelect.setOnClickListener { showProviderDialog() }
         binding.btnSwitchProvider.setOnClickListener { showProviderDialog() }
@@ -321,6 +329,7 @@ class MainActivity : AppCompatActivity() {
 
         // 3. Downstream Key Restart Hint
         binding.tvKeyRestartHint.visibility = if (state.keyNeedsRestart) View.VISIBLE else View.GONE
+        binding.tvGuardRestartHint.visibility = if (state.guardNeedsRestart) View.VISIBLE else View.GONE
 
         // 4. App Link
         binding.tvAppLink.text = state.appLink

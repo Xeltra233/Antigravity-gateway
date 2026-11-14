@@ -12,34 +12,99 @@ import (
 	"strings"
 	"time"
 
+	"antigravity-gateway/internal/antiroute"
 	"antigravity-gateway/internal/config"
 	"antigravity-gateway/internal/keymgmt"
 	"antigravity-gateway/internal/limiter"
 	"antigravity-gateway/internal/limits"
 	"antigravity-gateway/internal/metrics"
+	"antigravity-gateway/internal/modelid"
 	"antigravity-gateway/internal/proxy"
 	"antigravity-gateway/internal/server"
 	"antigravity-gateway/internal/synthetic"
 )
 
 type Orchestrator struct {
-	cfg        *config.Config
-	client     *proxy.UpstreamClient
-	keyMgr     *keymgmt.Manager
-	injector   *synthetic.RequestInjector
-	normalizer *synthetic.ResponseNormalizer
-	limiter    *limiter.ConcurrencyLimiter
+	cfg          *config.Config
+	client       *proxy.UpstreamClient
+	keyMgr       *keymgmt.Manager
+	injector     *synthetic.RequestInjector
+	normalizer   *synthetic.ResponseNormalizer
+	limiter      *limiter.ConcurrencyLimiter
+	antiRoute    *antiroute.Guard
+	antiRouteErr error
 }
 
 func NewOrchestrator(cfg *config.Config, client *proxy.UpstreamClient, keyMgr *keymgmt.Manager) *Orchestrator {
-	return &Orchestrator{
-		cfg:        cfg,
-		client:     client,
-		keyMgr:     keyMgr,
-		injector:   synthetic.NewRequestInjector(cfg),
-		normalizer: synthetic.NewResponseNormalizer(cfg),
-		limiter:    limiter.NewConcurrencyLimiter(cfg.MaxConcurrentRequests, cfg.MaxConcurrentRequestsPerKey, cfg.RequestQueueTimeout),
+	guardOpts := antiroute.Options{
+		Level:         antiroute.ParseLevel(cfg.AntiRouteLevel),
+		WireEscape:    cfg.AntiRouteWire,
+		Split:         cfg.AntiRouteSplit,
+		Scrub:         cfg.AntiRouteScrub,
+		ScrubScope:    cfg.AntiRouteScrubScope,
+		DemoteHistory: cfg.AntiRouteDemote,
+		Separator:     cfg.AntiRouteSeparator,
+		RulesPath:     cfg.AntiRouteRulesFile,
 	}
+	guard, guardErr := antiroute.New(guardOpts)
+	return &Orchestrator{
+		cfg:          cfg,
+		client:       client,
+		keyMgr:       keyMgr,
+		injector:     synthetic.NewRequestInjector(cfg),
+		normalizer:   synthetic.NewResponseNormalizer(cfg),
+		limiter:      limiter.NewConcurrencyLimiter(cfg.MaxConcurrentRequests, cfg.MaxConcurrentRequestsPerKey, cfg.RequestQueueTimeout),
+		antiRoute:    guard,
+		antiRouteErr: guardErr,
+	}
+}
+
+// AntiRouteError reports a configuration problem in the outbound guard so the
+// engine can refuse to start instead of silently serving unguarded traffic.
+func (o *Orchestrator) AntiRouteError() error {
+	return o.antiRouteErr
+}
+
+// exchange is the per-request state shared by the streaming and non-streaming
+// paths: the request id, the model identification result and the outbound
+// guard session that knows how to restore the response.
+type exchange struct {
+	reqID string
+	info  modelid.Info
+	guard *antiroute.Session
+}
+
+// encodeShaped re-serializes a body with the entropy-selected layout so the
+// guard does not collapse the request shape randomization.
+func (o *Orchestrator) encodeShaped(m map[string]any) ([]byte, error) {
+	src, err := o.injector.NewSource()
+	if err != nil {
+		return synthetic.MarshalShaped(m, nil, false)
+	}
+	return synthetic.MarshalShaped(m, src, o.injector.LayoutEnabled())
+}
+
+// protect applies the outbound guard to a marshaled request body.
+func (o *Orchestrator) protect(ex *exchange, body []byte) ([]byte, error) {
+	if ex == nil || ex.guard == nil {
+		return body, nil
+	}
+	return ex.guard.Protect(body, o.encodeShaped)
+}
+
+// reportModel copies the identification headers and optionally injects the
+// identification object into a JSON body.
+func (o *Orchestrator) reportModel(w http.ResponseWriter, ex *exchange, body []byte) []byte {
+	if ex == nil || o.cfg.ModelReport == "off" {
+		return body
+	}
+	if o.cfg.ModelReport == "headers" || o.cfg.ModelReport == "both" {
+		ex.info.ApplyHeaders(w.Header())
+	}
+	if (o.cfg.ModelReport == "body" || o.cfg.ModelReport == "both") && len(body) > 0 {
+		return ex.info.InjectBody(body, o.cfg.ModelReportKey)
+	}
+	return body
 }
 
 func (o *Orchestrator) HandleChatCompletions(w http.ResponseWriter, r *http.Request) {
@@ -98,6 +163,13 @@ func (o *Orchestrator) HandleChatCompletions(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	ex := &exchange{reqID: reqID}
+	ex.info = modelid.Identify(modelid.RequestedFrom(bodyBytes))
+	ex.info.Route = modelid.RouteFromPath(r.URL.Path)
+	if o.antiRoute.Enabled() {
+		ex.guard = o.antiRoute.NewSession()
+	}
+
 	// Inject synthetic transport tool
 	injected, err := o.injector.Inject(bodyBytes)
 	if err != nil {
@@ -105,14 +177,23 @@ func (o *Orchestrator) HandleChatCompletions(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	// Apply the outbound guard last so it sees the final message bytes.
+	guarded, guardErr := o.protect(ex, injected.TransformedBody)
+	if guardErr != nil {
+		server.WriteError(w, http.StatusInternalServerError, "Failed to prepare request: "+guardErr.Error(), "api_error", "internal_error")
+		return
+	}
+	injected.TransformedBody = guarded
+
 	if injected.IsStreaming {
-		o.handleStreaming(w, r.Context(), injected, reqID)
+		o.handleStreaming(w, r.Context(), injected, ex)
 	} else {
-		o.handleNonStreaming(w, r.Context(), injected, reqID, bodyBytes)
+		o.handleNonStreaming(w, r.Context(), injected, ex, bodyBytes)
 	}
 }
 
-func (o *Orchestrator) handleNonStreaming(w http.ResponseWriter, ctx context.Context, injected *synthetic.InjectedRequest, reqID string, originalBody []byte) {
+func (o *Orchestrator) handleNonStreaming(w http.ResponseWriter, ctx context.Context, injected *synthetic.InjectedRequest, ex *exchange, originalBody []byte) {
+	reqID := ex.reqID
 	maxAttempts := 1 + o.cfg.UpstreamEmptyRetries
 	var lastRespBody []byte
 	var lastRespStatus int
@@ -127,6 +208,14 @@ func (o *Orchestrator) handleNonStreaming(w http.ResponseWriter, ctx context.Con
 		if attempt > 1 {
 			currentReqID = fmt.Sprintf("%s_empty_retry_%d", reqID, attempt)
 			metrics.Default.SyntheticRetries.Add(1)
+			// Rebuild the request so the retry does not repeat the exact byte
+			// pattern of the previous attempt.
+			if re, reErr := o.injector.Inject(originalBody); reErr == nil {
+				if guardedRetry, gErr := o.protect(ex, re.TransformedBody); gErr == nil {
+					re.TransformedBody = guardedRetry
+					injected = re
+				}
+			}
 		}
 
 		upstreamReq, err := o.client.NewUpstreamRequest(ctx, http.MethodPost, o.cfg.UpstreamChatURL(), bytes.NewReader(injected.TransformedBody), currentReqID)
@@ -161,9 +250,11 @@ func (o *Orchestrator) handleNonStreaming(w http.ResponseWriter, ctx context.Con
 
 		if resp.StatusCode != http.StatusOK {
 			// Non-200, return immediately
+			ex.info = ex.info.WithResponse(lastRespHeader, lastRespBody)
+			body := o.reportModel(w, ex, lastRespBody)
 			w.Header().Set("Content-Type", lastRespHeader.Get("Content-Type"))
 			w.WriteHeader(lastRespStatus)
-			_, _ = w.Write(lastRespBody)
+			_, _ = w.Write(body)
 			return
 		}
 
@@ -184,12 +275,14 @@ func (o *Orchestrator) handleNonStreaming(w http.ResponseWriter, ctx context.Con
 	if normErr != nil {
 		// If decode failed and policy allows format retry
 		if o.cfg.RecoveryPolicy == "repair_then_retry" && stats != nil && stats.RealToolCallCount == 0 && ctx.Err() == nil {
-			retryNormalized, retryErr := o.attemptSingleFormatRetry(ctx, originalBody, reqID)
+			retryNormalized, retryHeader, retryErr := o.attemptSingleFormatRetry(ctx, originalBody, reqID, ex)
 			if retryErr == nil {
 				metrics.Default.SyntheticRetries.Add(1)
+				ex.info = ex.info.WithResponse(retryHeader, retryNormalized)
+				body := o.reportModel(w, ex, retryNormalized)
 				w.Header().Set("Content-Type", "application/json; charset=utf-8")
 				w.WriteHeader(http.StatusOK)
-				_, _ = w.Write(retryNormalized)
+				_, _ = w.Write(body)
 				return
 			}
 			if errors.Is(retryErr, limits.ErrExceeded) {
@@ -214,25 +307,35 @@ func (o *Orchestrator) handleNonStreaming(w http.ResponseWriter, ctx context.Con
 		}
 	}
 
+	if ex.guard != nil {
+		normalized = ex.guard.RestoreBytes(normalized)
+	}
+	ex.info = ex.info.WithResponse(lastRespHeader, lastRespBody)
+	normalized = o.reportModel(w, ex, normalized)
+
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	_, _ = w.Write(normalized)
 }
 
-func (o *Orchestrator) attemptSingleFormatRetry(ctx context.Context, originalBody []byte, reqID string) ([]byte, error) {
+func (o *Orchestrator) attemptSingleFormatRetry(ctx context.Context, originalBody []byte, reqID string, ex *exchange) ([]byte, http.Header, error) {
 	// Prepare retry injection with error correction message
 	var bodyMap map[string]any
 	if err := json.Unmarshal(originalBody, &bodyMap); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	newToolName, err := o.injector.GenerateUniqueToolName(nil)
+	src, err := o.injector.NewSource()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	newToolName, err := o.injector.GenerateUniqueToolName(src, nil)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	// Append synthetic tool
-	syntheticTool := o.injector.BuildSyntheticTool(newToolName)
+	syntheticTool := o.injector.BuildSyntheticTool(src, newToolName)
 	var rawTools []any
 	if tList, ok := bodyMap["tools"].([]any); ok {
 		rawTools = append(rawTools, tList...)
@@ -247,7 +350,7 @@ func (o *Orchestrator) attemptSingleFormatRetry(ctx context.Context, originalBod
 	// Add correction message as user role to guarantee Gemini turn compatibility
 	correctionMsg := map[string]any{
 		"role":    "user",
-		"content": fmt.Sprintf("Your previous response had formatting issues in the transport tool arguments. Please call the transport tool `%s` with valid JSON format `{\"content\": \"...\"}`.", newToolName),
+		"content": o.injector.BuildCorrectionMessage(src, newToolName),
 	}
 	var messages []any
 	if mList, ok := bodyMap["messages"].([]any); ok {
@@ -256,37 +359,58 @@ func (o *Orchestrator) attemptSingleFormatRetry(ctx context.Context, originalBod
 	messages = append(messages, correctionMsg)
 	bodyMap["messages"] = messages
 
-	retryBody, _ := json.Marshal(bodyMap)
+	retryBody, err := synthetic.MarshalShaped(bodyMap, src, o.injector.LayoutEnabled())
+	if err != nil {
+		return nil, nil, err
+	}
+	if guardedRetry, gErr := o.protect(ex, retryBody); gErr == nil {
+		retryBody = guardedRetry
+	}
 
 	retryReq, err := o.client.NewUpstreamRequest(ctx, http.MethodPost, o.cfg.UpstreamChatURL(), bytes.NewReader(retryBody), reqID+"_format_retry")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	resp, err := o.client.Do(retryReq)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("retry returned upstream status %d", resp.StatusCode)
+		return nil, nil, fmt.Errorf("retry returned upstream status %d", resp.StatusCode)
 	}
 
 	respBytes, err := limits.ReadAll(resp.Body, o.cfg.MaxResponseBytes)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	normalized, _, err := o.normalizer.NormalizeNonStreaming(respBytes, newToolName)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	if ex != nil && ex.guard != nil {
+		normalized = ex.guard.RestoreBytes(normalized)
 	}
 
-	return normalized, nil
+	return normalized, resp.Header, nil
 }
 
-func (o *Orchestrator) handleStreaming(w http.ResponseWriter, ctx context.Context, injected *synthetic.InjectedRequest, reqID string) {
+// peekStream returns the first available bytes of a stream without consuming
+// them permanently; callers must prepend them again. It returns as soon as any
+// data or error arrives, so a stalled upstream still surfaces its failure.
+func peekStream(r io.Reader) ([]byte, error) {
+	buf := make([]byte, 8192)
+	n, err := r.Read(buf)
+	if n > 0 {
+		return buf[:n], nil
+	}
+	return nil, err
+}
+func (o *Orchestrator) handleStreaming(w http.ResponseWriter, ctx context.Context, injected *synthetic.InjectedRequest, ex *exchange) {
+	reqID := ex.reqID
 	upstreamReq, err := o.client.NewUpstreamRequest(ctx, http.MethodPost, o.cfg.UpstreamChatURL(), bytes.NewReader(injected.TransformedBody), reqID)
 	if err != nil {
 		server.WriteError(w, http.StatusInternalServerError, "Failed to create upstream request", "api_error", "internal_error")
@@ -313,12 +437,35 @@ func (o *Orchestrator) handleStreaming(w http.ResponseWriter, ctx context.Contex
 			server.WriteError(w, http.StatusBadGateway, "Failed to read upstream response", "api_error", "upstream_error")
 			return
 		}
+		ex.info = ex.info.WithResponse(resp.Header, respBody)
+		body := o.reportModel(w, ex, respBody)
 		w.Header().Set("Content-Type", resp.Header.Get("Content-Type"))
 		w.WriteHeader(resp.StatusCode)
-		_, _ = w.Write(respBody)
+		_, _ = w.Write(body)
 		return
 	}
 
+	// Peek the first event before committing the response headers: streaming
+	// upstreams announce their model in the first chunk, and an immediate
+	// failure can still be reported as a normal error status.
+	limitedBody := limits.NewReader(resp.Body, o.cfg.MaxResponseBytes)
+	head, peekErr := peekStream(limitedBody)
+	if model := modelid.ModelFromStream(head); model != "" {
+		ex.info = ex.info.WithModel(model, modelid.SourceStream)
+	} else {
+		ex.info = ex.info.WithResponse(resp.Header, nil)
+	}
+	if peekErr != nil && len(head) == 0 && !errors.Is(peekErr, io.EOF) {
+		if ctx.Err() == nil {
+			server.WriteError(w, http.StatusBadGateway, "Upstream stream failed before the first event", "api_error", "upstream_error")
+		}
+		return
+	}
+	var streamBody io.Reader = limitedBody
+	if len(head) > 0 {
+		streamBody = io.MultiReader(bytes.NewReader(head), limitedBody)
+	}
+	o.reportModel(w, ex, nil)
 	w.Header().Set("Content-Type", "text/event-stream; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
@@ -330,7 +477,15 @@ func (o *Orchestrator) handleStreaming(w http.ResponseWriter, ctx context.Contex
 		flusher.Flush()
 	}
 
-	limitedBody := limits.NewReader(resp.Body, o.cfg.MaxResponseBytes)
+	// Restoring happens on the read side: a masked term regularly straddles two
+	// SSE events, so it has to be put back on the decoded event text rather than
+	// on the raw byte stream.
+	var streamReader io.Reader = streamBody
+	if ex.guard != nil {
+		if rw := ex.guard.NewStreamRewriter(streamBody); rw != nil {
+			streamReader = rw
+		}
+	}
 	if injected.SyntheticToolName == "" {
 		// Passthrough mode with immediate chunk-by-chunk flushing. The [DONE]
 		// event is the SSE application-level terminator; do not wait for an HTTP
@@ -339,9 +494,11 @@ func (o *Orchestrator) handleStreaming(w http.ResponseWriter, ctx context.Contex
 		doneMarker := []byte("data: [DONE]")
 		var tail []byte
 		for {
-			n, err := limitedBody.Read(buf)
+			n, err := streamReader.Read(buf)
 			if n > 0 {
-				_, _ = w.Write(buf[:n])
+				if _, werr := w.Write(buf[:n]); werr != nil {
+					return
+				}
 				if flusher != nil {
 					flusher.Flush()
 				}
@@ -366,7 +523,7 @@ func (o *Orchestrator) handleStreaming(w http.ResponseWriter, ctx context.Contex
 	}
 
 	transformer := synthetic.NewStreamTransformer(o.cfg, injected.SyntheticToolName)
-	stats, transformErr := transformer.Transform(limitedBody, w, flusher)
+	stats, transformErr := transformer.Transform(streamReader, w, flusher)
 	if transformErr != nil {
 		if errors.Is(transformErr, limits.ErrExceeded) {
 			slog.Warn("streaming upstream response exceeded configured size limit", "request_id", reqID)

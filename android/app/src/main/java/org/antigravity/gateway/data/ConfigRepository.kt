@@ -18,7 +18,7 @@ class ConfigRepository(
     var lastSaveError: Throwable? = null
         private set
     companion object {
-        const val CURRENT_SCHEMA_VERSION = 1
+        const val CURRENT_SCHEMA_VERSION = 2
         const val DEFAULT_CONFIG_FILE_NAME = "gateway_config.json"
 
         fun generateDownstreamKey(): String {
@@ -53,6 +53,7 @@ class ConfigRepository(
             }
             val rawPort = root.optInt("port", NetworkUtils.GATEWAY_PORT)
             val port = if (rawPort in 1..65535) rawPort else NetworkUtils.GATEWAY_PORT
+            val guard = readGuard(root.optJSONObject("guard"))
 
             val providersArray = root.optJSONArray("providers") ?: JSONArray()
             val providersList = mutableListOf<Provider>()
@@ -81,7 +82,8 @@ class ConfigRepository(
                 currentProviderId = finalCurrentId,
                 downstreamKey = downstreamKey,
                 port = port,
-                providers = providersList
+                providers = providersList,
+                guard = guard
             )
             inMemoryConfig = loadedConfig
             return loadedConfig
@@ -125,6 +127,7 @@ class ConfigRepository(
             root.put("currentProviderId", config.currentProviderId)
             root.put("downstreamKeyCiphertext", cryptoProvider.encrypt(config.downstreamKey))
             root.put("port", config.port)
+            root.put("guard", writeGuard(config.guard))
 
             val array = JSONArray()
             for (p in config.providers) {
@@ -260,5 +263,44 @@ class ConfigRepository(
         val updated = current.copy(downstreamKey = newKey)
         save(updated)
         return updated
+    }
+
+    @Synchronized
+    fun updateGuard(guard: GuardSettings): GatewayConfig {
+        val current = load()
+        val updated = current.copy(guard = guard)
+        save(updated)
+        return updated
+    }
+
+    /** Reads the guard block. A config file written before schema 2 has none, so defaults apply. */
+    private fun readGuard(obj: JSONObject?): GuardSettings {
+        if (obj == null) return GuardSettings()
+        return GuardSettings(
+            antiRouteLevel = AntiRouteLevel.fromName(obj.optString("antiRouteLevel")),
+            wireEscape = obj.optBoolean("wireEscape", true),
+            scrub = obj.optBoolean("scrub", true),
+            split = obj.optBoolean("split", false),
+            scrubScope = AntiRouteScrubScope.fromName(obj.optString("scrubScope")),
+            demotePrefill = obj.optBoolean("demotePrefill", false),
+            separator = AntiRouteSeparator.fromName(obj.optString("separator")),
+            modelReport = ModelReportMode.fromName(obj.optString("modelReport")),
+            modelReportKey = obj.optString("modelReportKey").trim()
+                .ifEmpty { GuardSettings.DEFAULT_MODEL_REPORT_KEY }
+        )
+    }
+
+    private fun writeGuard(guard: GuardSettings): JSONObject {
+        val obj = JSONObject()
+        obj.put("antiRouteLevel", guard.antiRouteLevel.wireName)
+        obj.put("wireEscape", guard.wireEscape)
+        obj.put("scrub", guard.scrub)
+        obj.put("split", guard.split)
+        obj.put("scrubScope", guard.scrubScope.wireName)
+        obj.put("demotePrefill", guard.demotePrefill)
+        obj.put("separator", guard.separator.wireName)
+        obj.put("modelReport", guard.modelReport.wireName)
+        obj.put("modelReportKey", guard.modelReportKey.trim().ifEmpty { GuardSettings.DEFAULT_MODEL_REPORT_KEY })
+        return obj
     }
 }

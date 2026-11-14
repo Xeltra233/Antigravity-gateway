@@ -68,7 +68,7 @@
 
 #### 场景 A：Android 用户（推荐普通用户）
 
-1. 打开 [Releases](https://github.com/Xeltra233/Antigravity-gateway/releases/latest)，下载 `antigravity-gateway-v<版本>.apk`（当前为 `v1.0.13`）。
+1. 打开 [Releases](https://github.com/Xeltra233/Antigravity-gateway/releases/latest)，下载 `antigravity-gateway-v<版本>.apk`（当前为 `v1.0.15`）。
 2. 在手机上安装 APK（首次安装需允许「安装未知来源应用」）。
 3. 打开应用 → 点击「切换/新建」填写上游供应商：
    - **上游地址**：如 `https://api.openai.com/v1`（或任何兼容 Chat Completions 的服务）
@@ -272,7 +272,7 @@ cd android
 ./gradlew :app:assembleRelease
 
 # 产物输出路径:
-# android/app/build/outputs/apk/release/antigravity-gateway-v1.0.13.apk
+# android/app/build/outputs/apk/release/antigravity-gateway-v1.0.15.apk
 ```
 
 ---
@@ -312,7 +312,7 @@ cd Antigravity-gateway
 - **查看版本信息**:
   ```bash
   ./gateway -v
-  # 输出: Antigravity Gateway version 1.0.13 (commit: ..., built: ...)
+  # 输出: Antigravity Gateway version 1.0.15 (commit: ..., built: ...)
   ```
 
 - **跨平台交叉编译 (在一台机器上为其他系统编译)**:
@@ -353,8 +353,23 @@ cd Antigravity-gateway
 | `UPSTREAM_EMPTY_RETRIES` | 否 | `3` | 上游空回（完全没有任何输出）时的自动重试次数 |
 | `CONTROL_MESSAGE_ROLE` | 否 | `system` | 控制提示词角色：`system` 或 `developer` |
 | `CONTROL_MESSAGE_POSITION`| 否 | `tail` | 控制提示词注入位置：`tail`（末尾强生效）、`head`、`system_tail` |
-| `SYNTHETIC_TOOL_PREFIX` | 否 | `agw_emit_` | 动态合成工具的前缀（用于生成 96-bit 随机工具名） |
+| `SYNTHETIC_TOOL_PREFIX` | 否 | 空（随机名） | 固定工具名前缀；留空时由熵源自行拼接工具名，填写后按 `前缀 + 96-bit 随机串` 生成 |
 | `SYNTHETIC_TOOL_STRICT` | 否 | `false` | 是否向模型发送严格（Strict）Tool Schema 约束 |
+| `ENTROPY_LEVEL` | 否 | `standard` | 请求形态随机化强度：`off`（关闭）、`light`（仅标识符与 JSON 布局）、`standard`（布局 + 措辞）、`aggressive`（追加不可见分隔符与采样参数微扰） |
+| `ENTROPY_LAYOUT` | 否 | 随 `ENTROPY_LEVEL` | 覆盖 JSON 键序与空白排版随机化开关（`true`/`false`） |
+| `ENTROPY_INVISIBLE` | 否 | 随 `ENTROPY_LEVEL` | 覆盖网关注入文本中的零宽分隔符开关（仅作用于网关自身生成的指令文本，不改动对话内容） |
+| `ENTROPY_PARAM_JITTER` | 否 | 随 `ENTROPY_LEVEL` | 覆盖采样参数微扰开关（`temperature` 与 `top_p` 在 ±0.01 内浮动，带边界钳制） |
+| `ENTROPY_SEED` | 否 | 随机 | 固定随机种子（仅用于复现问题，生产环境留空） |
+| `ANTI_ROUTE_LEVEL` | 否 | `wire` | 出站请求防路由层级：`off`、`wire`（非 ASCII 转义）、`standard`（追加指令块净化）、`deep`（追加拆词掩码与响应侧还原） |
+| `ANTI_ROUTE_WIRE_ESCAPE` | 否 | 随 `ANTI_ROUTE_LEVEL` | 覆盖 `\uXXXX` 转义开关 |
+| `ANTI_ROUTE_SCRUB` | 否 | 随 `ANTI_ROUTE_LEVEL` | 覆盖指令块净化开关 |
+| `ANTI_ROUTE_SPLIT` | 否 | 随 `ANTI_ROUTE_LEVEL` | 覆盖拆词掩码开关（可逆，响应侧自动还原） |
+| `ANTI_ROUTE_DEMOTE_PREFILL` | 否 | 随 `ANTI_ROUTE_LEVEL` | 覆盖末尾 assistant 预填降级开关 |
+| `ANTI_ROUTE_SCRUB_SCOPE` | 否 | `leading` | 净化范围：`leading`（仅前导指令块）或 `all`（全部 system 文本） |
+| `ANTI_ROUTE_SEPARATOR` | 否 | `hyphen` | 拆词分隔符：`hyphen`（`-`）或 `wordjoiner`（U+2060） |
+| `ANTI_ROUTE_RULES_FILE` | 否 | 空 | 追加规则文件路径（JSON：`split_terms` / `scrub` / `replace`） |
+| `MODEL_REPORT` | 否 | `headers` | 模型识别结果回传方式：`off`、`headers`、`body`、`both` |
+| `MODEL_REPORT_KEY` | 否 | `antigravity_model` | `body` 回传时使用的字段名 |
 | `TEXT_MODEL_PATTERN` | 否 | - | 可选正则：自定义判定为文本对话模型并启用防截断保护的匹配规则 |
 | `NON_TEXT_MODEL_PATTERN` | 否 | - | 可选正则：自定义判定为生图/语音/嵌入模型并跳过合成包装直接透传的匹配规则 |
 | `MAX_REQUEST_BYTES` | 否 | `16777216` | 最大允许请求大小（字节，默认 16MB） |
@@ -396,6 +411,51 @@ UPSTREAM_EMPTY_RETRIES=3
 # 日志级别
 LOG_LEVEL=info
 ```
+
+#### 🔀 请求形态随机化
+
+网关每次转发都会重新生成自身的传输外壳，使同一段对话在多次请求中呈现不同的线上形态：
+
+| 维度 | 变化内容 | 影响范围 |
+| :--- | :--- | :--- |
+| 合成工具名 | 由动词/名词池拼装，或按配置前缀追加 96-bit 随机串 | 网关自行声明的工具，不涉及客户端工具 |
+| 控制提示词 | 多条等价措辞模板 + 约束句随机组合 | 网关注入的指令文本 |
+| JSON 布局 | 键序随机排列，空白风格在紧凑/单空格/缩进间切换 | 仅编码形式，语义完全不变 |
+| 客户端指纹 | `User-Agent`、`Accept` 从真实浏览器池中抽取 | 出站请求头 |
+| 请求 ID | 前缀与随机段长度变化 | 链路追踪标识 |
+| 采样参数 | `temperature`、`top_p` 在 ±0.01 内浮动 | 仅在 `aggressive` 级别生效 |
+
+三点约束始终成立：下游对话内容不会被改写（包括 `messages`、`tools`、采样参数以外的字段）；随机化只作用于网关自身生成的脚手架；`ENTROPY_SEED` 可固定全部随机源，便于复现问题。
+
+需要回退到完全固定的旧形态时，设置 `ENTROPY_LEVEL=off` 即可：工具名回到 `agw_emit_` + 96-bit 随机串，控制提示词与 JSON 布局恢复为单一固定写法。
+
+
+#### 🧱 出站请求防路由
+
+部分上游会对请求体做内容分类，命中特定词表时静默降级或改路由。网关在传输层提供一道可逆的分级防护，只作用于出站字节形态，不改语义：
+
+| 级别 | 行为 | 还原 |
+| :--- | :--- | :--- |
+| `off` | 不追加任何处理 | - |
+| `wire` | 请求体中的非 ASCII 字符写为 `\uXXXX`（默认） | 上游解析后语义不变，无需还原 |
+| `standard` | `wire` + 前导指令块中的高风险词替换为等价表述 | 只改写网关自身可见的指令文本 |
+| `deep` | `standard` + 词表中性词拆分掩码（`甲-乙`），可选把末尾 `assistant` 预填降级为 `user` | 响应中的掩码形态在转发前还原为原词 |
+
+约束：掩码不改变对话语义；拆分位置由加密随机决定，不受 `ENTROPY_SEED` 影响；`ANTI_ROUTE_RULES_FILE` 以 JSON 追加规则（`{"split_terms": [...], "scrub": {"原文": "替换"}, "replace": false}`，`replace: true` 时整体替换默认规则）。
+
+流式响应按事件解码后逐段还原，跨越两个事件的掩码词同样能拼接回来；无法识别的非 SSE 行按原样透传。
+
+#### 🏷️ 模型识别回传
+
+网关会综合请求字段、上游响应体与响应头解析本次实际命中的模型，并按 `MODEL_REPORT` 回传给下游：
+
+| 回传方式 | 内容 |
+| :--- | :--- |
+| `headers`（默认） | `X-AGW-Model`、`X-AGW-Model-Family`、`X-AGW-Model-Version`、`X-AGW-Model-Capabilities`、`X-AGW-Model-Source`、`X-AGW-Route` |
+| `body` | 响应 JSON 中追加 `antigravity_model` 对象（`model` / `family` / `version` / `capabilities` / `source` / `route` / `requested`），字段名可由 `MODEL_REPORT_KEY` 调整 |
+| `both` | 同时输出上述两者 |
+
+`source` 说明识别来源：`request`（请求字段）、`response-body`（响应体）、`response-header`（响应头）、`response-stream`（流式首个事件）、`fallback`（上游未回传时的兜底）。流式请求会在提交响应头之前预读首个事件完成识别，随后原样回放，不改变流式时序。
 
 ---
 
@@ -572,8 +632,8 @@ curl -X POST http://127.0.0.1:8080/admin/keys/key_7f8a91b2c3d4/revoke \
 
 ### 🛡️ 运维监控与健康检查
 
-- **存活探针 (Liveness)**: `GET /healthz` → 返回 `{"status":"ok","version":"1.0.13"}` (200 OK)
-- **就绪探针 (Readiness)**: `GET /readyz` → 返回 `{"status":"ready","version":"1.0.13"}` (200 OK)
+- **存活探针 (Liveness)**: `GET /healthz` → 返回 `{"status":"ok","version":"1.0.15"}` (200 OK)
+- **就绪探针 (Readiness)**: `GET /readyz` → 返回 `{"status":"ready","version":"1.0.15"}` (200 OK)
 - **Prometheus 监控指标**: `GET /metrics` → 输出请求总量、活跃请求数、过载拒绝、合成包装命中/修复/重试/冲突等指标。
 - **紧急回滚**: 若遇到突发未知上游格式异常，修改 `.env` 中的 `WRAPPER_MODE=off` 并重启网关，即可切换为原生纯透传模式。
 
@@ -605,7 +665,7 @@ Antigravity-gateway/
 ### 📦 版本与发布流程
 
 - **版本号**同时写入 4 处并保持一致：`android/app/build.gradle.kts`（`versionCode`/`versionName`）、`cmd/gateway/main.go`、`internal/*/engine.go`、本 README。
-- 推送形如 `v1.0.13` 的 **标签** 即触发 `.github/workflows/release.yml`：
+- 推送形如 `v1.0.15` 的 **标签** 即触发 `.github/workflows/release.yml`：
   1. 编译 Android APK（debug/release 双构建 + 单元测试 + lint）；
   2. 交叉编译 6 个服务端二进制（Linux/Windows/macOS × amd64/arm64）；
   3. 通过 `ldflags -X main.Version=<tag>` 把版本号与 commit SHA 注入二进制；
@@ -613,10 +673,10 @@ Antigravity-gateway/
 - **校验发布产物**：
 
 ```bash
-gh release view v1.0.13                                   # 资产列表
+gh release view v1.0.15                                   # 资产列表
 sha256sum -c checksums.txt                                # 校验下载文件
-antigravity-gateway --version                             # v1.0.13 (commit: ...)
-aapt2 dump badging antigravity-gateway-v1.0.13.apk | head -1   # APK 版本
+antigravity-gateway --version                             # v1.0.15 (commit: ...)
+aapt2 dump badging antigravity-gateway-v1.0.15.apk | head -1   # APK 版本
 ```
 
 - **升级约定**：已发布版本不再修改；每个变更批次递增补丁号并重新走完整验证（单元测试 → 真机/模拟器用例 → 发布校验）。
@@ -660,7 +720,7 @@ By embedding the high-performance Go native core (`libantigravity.so`) via JNI, 
 
 #### Option A — Android (end users)
 
-1. Download `antigravity-gateway-v<version>.apk` (currently `v1.0.13`) from [Releases](https://github.com/Xeltra233/Antigravity-gateway/releases/latest).
+1. Download `antigravity-gateway-v<version>.apk` (currently `v1.0.15`) from [Releases](https://github.com/Xeltra233/Antigravity-gateway/releases/latest).
 2. Install it (allow "install from unknown sources" the first time).
 3. Open the app → tap **切换/新建** to add an upstream provider: base URL (e.g. `https://api.openai.com/v1`) and your upstream API key.
 4. Tap **启动网关** and wait for the status card to show **网关运行中**.
@@ -783,7 +843,7 @@ adb pull /sdcard/Android/data/org.antigravity.gateway/files/crash-logs/ ./crash-
 cd android
 ./gradlew :app:testReleaseUnitTest
 ./gradlew :app:assembleRelease
-# Output APK: android/app/build/outputs/apk/release/antigravity-gateway-v1.0.13.apk
+# Output APK: android/app/build/outputs/apk/release/antigravity-gateway-v1.0.15.apk
 ```
 
 ---
@@ -844,8 +904,23 @@ The gateway follows 12-Factor App design principles and reads configuration foll
 | `UPSTREAM_EMPTY_RETRIES` | No | `3` | Number of automatic retries upon receiving empty responses from upstream |
 | `CONTROL_MESSAGE_ROLE` | No | `system` | Injected control message role: `system` or `developer` |
 | `CONTROL_MESSAGE_POSITION`| No | `tail` | Injected message position: `tail` (recommended for strong adherence), `head`, `system_tail` |
-| `SYNTHETIC_TOOL_PREFIX` | No | `agw_emit_` | Prefix for generated 96-bit synthetic tool names |
+| `SYNTHETIC_TOOL_PREFIX` | No | empty (random name) | Fixed tool-name prefix; leave empty to let the entropy source assemble the name, otherwise `prefix + 96-bit nonce` |
 | `SYNTHETIC_TOOL_STRICT` | No | `false` | Whether to send strict schema validation constraint in tool definition |
+| `ENTROPY_LEVEL` | No | `standard` | Request-shape randomization strength: `off`, `light` (identifiers + JSON layout), `standard` (layout + wording), `aggressive` (adds invisible separators and sampling jitter) |
+| `ENTROPY_LAYOUT` | No | per `ENTROPY_LEVEL` | Overrides JSON key-order and whitespace randomization |
+| `ENTROPY_INVISIBLE` | No | per `ENTROPY_LEVEL` | Overrides zero-width separators in gateway-authored instruction text only |
+| `ENTROPY_PARAM_JITTER` | No | per `ENTROPY_LEVEL` | Overrides sampling jitter (`temperature` and `top_p` within ±0.01, clamped to valid ranges) |
+| `ENTROPY_SEED` | No | random | Fixed random seed for reproducing an issue; leave empty in production |
+| `ANTI_ROUTE_LEVEL` | No | `wire` | Outbound anti-routing level: `off`, `wire` (non-ASCII escaping), `standard` (adds instruction-block scrubbing), `deep` (adds term masking with response-side restore) |
+| `ANTI_ROUTE_WIRE_ESCAPE` | No | per `ANTI_ROUTE_LEVEL` | Overrides `\uXXXX` escaping |
+| `ANTI_ROUTE_SCRUB` | No | per `ANTI_ROUTE_LEVEL` | Overrides instruction-block scrubbing |
+| `ANTI_ROUTE_SPLIT` | No | per `ANTI_ROUTE_LEVEL` | Overrides reversible term masking |
+| `ANTI_ROUTE_DEMOTE_PREFILL` | No | per `ANTI_ROUTE_LEVEL` | Overrides demoting a trailing assistant prefill to a user message |
+| `ANTI_ROUTE_SCRUB_SCOPE` | No | `leading` | Scrub scope: `leading` (leading instruction block) or `all` |
+| `ANTI_ROUTE_SEPARATOR` | No | `hyphen` | Mask separator: `hyphen` (`-`) or `wordjoiner` (U+2060) |
+| `ANTI_ROUTE_RULES_FILE` | No | empty | Extra rules file (JSON: `split_terms` / `scrub` / `replace`) |
+| `MODEL_REPORT` | No | `headers` | How the identified model is reported: `off`, `headers`, `body`, `both` |
+| `MODEL_REPORT_KEY` | No | `antigravity_model` | Field name used for the `body` report |
 | `TEXT_MODEL_PATTERN` | No | - | Optional regex override to classify models as text/chat models |
 | `NON_TEXT_MODEL_PATTERN` | No | - | Optional regex override to classify models as non-text (vision/audio/embedding) to skip wrapper |
 | `MAX_REQUEST_BYTES` | No | `16777216` | Maximum allowed request size in bytes (default: 16MB) |
@@ -887,6 +962,51 @@ UPSTREAM_EMPTY_RETRIES=3
 # Logging
 LOG_LEVEL=info
 ```
+
+#### 🔀 Request Shape Randomization
+
+Every forwarded request rebuilds the gateway's own transport shell, so the same conversation presents a different wire shape across turns:
+
+| Dimension | What changes | Scope |
+| :--- | :--- | :--- |
+| Synthetic tool name | Assembled from verb/noun pools, or configured prefix plus a 96-bit nonce | Gateway-declared tool only; client tools untouched |
+| Control prompt | Equivalent wording templates combined with randomized constraint clauses | Gateway-injected instruction text |
+| JSON layout | Key order permuted; whitespace switches between compact / spaced / indented | Encoding only — semantics unchanged |
+| Client fingerprint | `User-Agent` and `Accept` drawn from a real browser pool | Outbound request headers |
+| Request ID | Prefix and random segment length vary | Trace identifier |
+| Sampling params | `temperature` and `top_p` move within ±0.01 | `aggressive` level only |
+
+Three invariants always hold: downstream conversation content is never rewritten (outside `messages`, `tools`, and the sampling fields); randomization touches only scaffolding the gateway itself generates; `ENTROPY_SEED` pins every random source for reproducible debugging.
+
+Set `ENTROPY_LEVEL=off` to return to the fully fixed legacy shape: tool names fall back to `agw_emit_` plus a 96-bit nonce, and the control prompt and JSON layout collapse to a single fixed form.
+
+
+#### 🧱 Outbound anti-routing
+
+Some upstreams classify request bodies and silently downgrade or reroute traffic that hits a term list. The gateway offers a reversible, tiered guard that only changes the outbound byte shape, never the meaning:
+
+| Level | Behaviour | Restore |
+| :--- | :--- | :--- |
+| `off` | No extra processing | - |
+| `wire` | Non-ASCII characters in the body are written as `\uXXXX` (default) | Semantics are unchanged once parsed; nothing to restore |
+| `standard` | `wire` plus high-risk words in the leading instruction block replaced with equivalent wording | Only the instruction text the gateway itself exposes is touched |
+| `deep` | `standard` plus neutral-term masking (`a-b`), optionally demoting a trailing assistant prefill to `user` | Masked forms in the response are restored before the client sees them |
+
+Constraints: masking never changes what the conversation means; split positions come from cryptographic randomness and are not affected by `ENTROPY_SEED`; `ANTI_ROUTE_RULES_FILE` appends rules as JSON (`{"split_terms": [...], "scrub": {"source": "replacement"}, "replace": false}`; `replace: true` swaps the defaults out entirely).
+
+Streaming responses are restored per decoded event, so a masked term spanning two events is still reassembled; lines the gateway cannot recognise are passed through untouched.
+
+#### 🏷️ Model reporting
+
+The gateway resolves the model actually served from the request fields, the response body and the response headers, then reports it according to `MODEL_REPORT`:
+
+| Mode | Content |
+| :--- | :--- |
+| `headers` (default) | `X-AGW-Model`, `X-AGW-Model-Family`, `X-AGW-Model-Version`, `X-AGW-Model-Capabilities`, `X-AGW-Model-Source`, `X-AGW-Route` |
+| `body` | an `antigravity_model` object in the response JSON (`model` / `family` / `version` / `capabilities` / `source` / `route` / `requested`), renameable via `MODEL_REPORT_KEY` |
+| `both` | Both of the above |
+
+`source` states where the value came from: `request`, `response-body`, `response-header`, `response-stream` (first stream event) or `fallback`. Streaming requests peek the first event before committing response headers, then replay it byte for byte, so stream timing is unchanged.
 
 ---
 
@@ -1048,8 +1168,8 @@ The gateway is 100% compliant with standard OpenAI `/v1` endpoints.
 
 ### 🛡️ Health Checks & Observability
 
-- **Liveness Probe**: `GET /healthz` → returns `{"status":"ok","version":"1.0.13"}` (200 OK)
-- **Readiness Probe**: `GET /readyz` → returns `{"status":"ready","version":"1.0.13"}` (200 OK)
+- **Liveness Probe**: `GET /healthz` → returns `{"status":"ok","version":"1.0.15"}` (200 OK)
+- **Readiness Probe**: `GET /readyz` → returns `{"status":"ready","version":"1.0.15"}` (200 OK)
 - **Prometheus Metrics**: `GET /metrics` → exports standard metrics including request totals, latencies, active connections, and synthetic wrapper counts.
 - **Emergency Fallback**: Set `WRAPPER_MODE=off` in `.env` and restart the gateway to revert to transparent raw passthrough.
 
@@ -1089,10 +1209,10 @@ Antigravity-gateway/
 - Verify a release:
 
 ```bash
-gh release view v1.0.13
+gh release view v1.0.15
 sha256sum -c checksums.txt
-antigravity-gateway --version                                  # v1.0.13 (commit: ...)
-aapt2 dump badging antigravity-gateway-v1.0.13.apk | head -1    # APK version
+antigravity-gateway --version                                  # v1.0.15 (commit: ...)
+aapt2 dump badging antigravity-gateway-v1.0.15.apk | head -1    # APK version
 ```
 
 - Published versions are immutable: every change batch bumps the patch level and repeats the full verification chain (unit tests → device checks → release validation).

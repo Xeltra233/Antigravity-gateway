@@ -9,6 +9,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"antigravity-gateway/internal/antiroute"
+	"antigravity-gateway/internal/entropy"
 )
 
 type StaticKeyConfig struct {
@@ -44,6 +47,23 @@ type Config struct {
 	SyntheticToolPrefix    string
 	SyntheticToolStrict    bool
 
+	EntropyLevel       string
+	EntropyLayout      bool
+	EntropyInvisible   bool
+	EntropyParamJitter bool
+	EntropySeed        uint64
+
+	AntiRouteLevel      string // off, wire, standard, deep
+	AntiRouteWire       bool
+	AntiRouteScrub      bool
+	AntiRouteSplit      bool
+	AntiRouteScrubScope string // leading, all
+	AntiRouteDemote     bool
+	AntiRouteSeparator  string // hyphen, wordjoiner
+	AntiRouteRulesFile  string
+
+	ModelReport          string // off, headers, body, both
+	ModelReportKey       string // JSON key used when ModelReport includes body
 	WrapperMode          string // prefer, required, off
 	RecoveryPolicy       string // repair, repair_then_retry, fail
 	UpstreamEmptyRetries int    // default 3
@@ -199,11 +219,82 @@ func Load(getenv func(string) string) (*Config, error) {
 	}
 
 	// Synthetic Tool Prefix & Strict
+	// An explicit prefix pins the tool-name shape for compatibility. Leaving it
+	// empty generates the prefix from the entropy pools per request.
 	cfg.SyntheticToolPrefix = strings.TrimSpace(getenv("SYNTHETIC_TOOL_PREFIX"))
-	if cfg.SyntheticToolPrefix == "" {
-		cfg.SyntheticToolPrefix = "agw_emit_"
-	}
 	cfg.SyntheticToolStrict = getBool(getenv("SYNTHETIC_TOOL_STRICT"), false)
+
+	// Request-shape entropy
+	rawLevel := strings.ToLower(strings.TrimSpace(getenv("ENTROPY_LEVEL")))
+	switch rawLevel {
+	case "", "off", "light", "standard", "aggressive":
+	default:
+		return nil, fmt.Errorf("invalid ENTROPY_LEVEL: %q (must be 'off', 'light', 'standard', or 'aggressive')", rawLevel)
+	}
+	level := entropy.ParseLevel(rawLevel)
+	cfg.EntropyLevel = string(level)
+	defaults := entropy.DefaultOptions(level)
+	cfg.EntropyLayout = getBool(getenv("ENTROPY_LAYOUT"), defaults.Layout)
+	cfg.EntropyInvisible = getBool(getenv("ENTROPY_INVISIBLE"), defaults.Invisible)
+	cfg.EntropyParamJitter = getBool(getenv("ENTROPY_PARAM_JITTER"), defaults.ParamJitter)
+	if rawSeed := strings.TrimSpace(getenv("ENTROPY_SEED")); rawSeed != "" {
+		seed, err := strconv.ParseUint(rawSeed, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid ENTROPY_SEED: %q (must be an unsigned integer)", rawSeed)
+		}
+		cfg.EntropySeed = seed
+	}
+
+	// Outbound request guard (anti-route shaping)
+	rawGuard := strings.ToLower(strings.TrimSpace(getenv("ANTI_ROUTE_LEVEL")))
+	switch rawGuard {
+	case "", "off", "wire", "standard", "deep":
+	default:
+		return nil, fmt.Errorf("invalid ANTI_ROUTE_LEVEL: %q (must be 'off', 'wire', 'standard', or 'deep')", rawGuard)
+	}
+	cfg.AntiRouteLevel = rawGuard
+	if cfg.AntiRouteLevel == "" {
+		cfg.AntiRouteLevel = "wire"
+	}
+	guardDefaults := antiroute.DefaultOptions(antiroute.ParseLevel(cfg.AntiRouteLevel))
+	cfg.AntiRouteWire = getBool(getenv("ANTI_ROUTE_WIRE_ESCAPE"), guardDefaults.WireEscape)
+	cfg.AntiRouteScrub = getBool(getenv("ANTI_ROUTE_SCRUB"), guardDefaults.Scrub)
+	cfg.AntiRouteSplit = getBool(getenv("ANTI_ROUTE_SPLIT"), guardDefaults.Split)
+	cfg.AntiRouteDemote = getBool(getenv("ANTI_ROUTE_DEMOTE_PREFILL"), guardDefaults.DemoteHistory)
+	cfg.AntiRouteScrubScope = strings.ToLower(strings.TrimSpace(getenv("ANTI_ROUTE_SCRUB_SCOPE")))
+	if cfg.AntiRouteScrubScope == "" {
+		cfg.AntiRouteScrubScope = guardDefaults.ScrubScope
+	}
+	if cfg.AntiRouteScrubScope != "leading" && cfg.AntiRouteScrubScope != "all" {
+		return nil, fmt.Errorf("invalid ANTI_ROUTE_SCRUB_SCOPE: %q (must be 'leading' or 'all')", cfg.AntiRouteScrubScope)
+	}
+	switch strings.ToLower(strings.TrimSpace(getenv("ANTI_ROUTE_SEPARATOR"))) {
+	case "", "hyphen", "-":
+		cfg.AntiRouteSeparator = antiroute.SepHyphen
+	case "wordjoiner", "wj", "word_joiner":
+		cfg.AntiRouteSeparator = antiroute.SepWordJoiner
+	default:
+		return nil, fmt.Errorf("invalid ANTI_ROUTE_SEPARATOR: %q (must be 'hyphen' or 'wordjoiner')", getenv("ANTI_ROUTE_SEPARATOR"))
+	}
+	cfg.AntiRouteRulesFile = strings.TrimSpace(getenv("ANTI_ROUTE_RULES_FILE"))
+	if cfg.AntiRouteRulesFile != "" {
+		if _, err := antiroute.LoadRules(cfg.AntiRouteRulesFile); err != nil {
+			return nil, err
+		}
+	}
+
+	// Model identification reporting
+	cfg.ModelReport = strings.ToLower(strings.TrimSpace(getenv("MODEL_REPORT")))
+	if cfg.ModelReport == "" {
+		cfg.ModelReport = "headers"
+	}
+	if cfg.ModelReport != "off" && cfg.ModelReport != "headers" && cfg.ModelReport != "body" && cfg.ModelReport != "both" {
+		return nil, fmt.Errorf("invalid MODEL_REPORT: %q (must be 'off', 'headers', 'body', or 'both')", cfg.ModelReport)
+	}
+	cfg.ModelReportKey = strings.TrimSpace(getenv("MODEL_REPORT_KEY"))
+	if cfg.ModelReportKey == "" {
+		cfg.ModelReportKey = "antigravity_model"
+	}
 
 	// Wrapper Mode
 	cfg.WrapperMode = strings.ToLower(strings.TrimSpace(getenv("WRAPPER_MODE")))

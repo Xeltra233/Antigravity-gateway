@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import org.antigravity.gateway.data.AndroidKeystoreCryptoProvider
 import org.antigravity.gateway.data.ConfigRepository
 import org.antigravity.gateway.data.GatewayConfig
+import org.antigravity.gateway.data.GuardSettings
 import org.antigravity.gateway.data.Provider
 import org.antigravity.gateway.net.GatewayTestClient
 import org.antigravity.gateway.service.GatewayServiceController
@@ -34,7 +35,8 @@ data class UiState(
     val testResult: String = "网关未启动",
     val isTesting: Boolean = false,
     val lastFetchedModels: List<String> = emptyList(),
-    val keyNeedsRestart: Boolean = false
+    val keyNeedsRestart: Boolean = false,
+    val guardNeedsRestart: Boolean = false
 )
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
@@ -74,7 +76,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 _uiState.value = _uiState.value.copy(
                     gatewayState = state,
                     testResult = defaultTestText,
-                    keyNeedsRestart = if (state == GatewayState.RUNNING) _uiState.value.keyNeedsRestart else false
+                    keyNeedsRestart = if (state == GatewayState.RUNNING) _uiState.value.keyNeedsRestart else false,
+                    guardNeedsRestart = if (state == GatewayState.RUNNING) _uiState.value.guardNeedsRestart else false
                 )
             }
         }
@@ -233,7 +236,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             upstreamUrl = url,
             upstreamKey = key,
             downstreamKey = downstream,
-            port = port
+            port = port,
+            guard = _uiState.value.config.guard
         )
     }
 
@@ -310,6 +314,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     testResult = "❌ $err"
                 )
             }
+        }
+    }
+
+    fun updateGuardSettings(guard: GuardSettings) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val updated = repository.updateGuard(guard)
+            val running = _uiState.value.gatewayState == GatewayState.RUNNING ||
+                _uiState.value.gatewayState == GatewayState.STARTING
+            _uiState.value = _uiState.value.copy(config = updated, guardNeedsRestart = running)
+            reportPersistenceFailure()
         }
     }
 

@@ -28,6 +28,16 @@
             android:textStyle="bold" />
 
         <ImageButton
+            android:id="@+id/btnSettings"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/settings_entry"
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_settings"
+            app:tint="@color/on_primary" />
+
+        <ImageButton
             android:id="@+id/btnThemeMode"
             android:layout_width="40dp"
             android:layout_height="40dp"
@@ -238,6 +248,15 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:text="* 重新生成 Key 需重启网关生效"
+                        android:textSize="11sp"
+                        android:textColor="@color/text_secondary"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/tvGuardRestartHint"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/settings_restart_to_apply"
                         android:textSize="11sp"
                         android:textColor="@color/text_secondary"
                         android:visibility="gone" />

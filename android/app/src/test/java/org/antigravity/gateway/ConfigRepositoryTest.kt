@@ -1,6 +1,11 @@
 package org.antigravity.gateway
 
+import org.antigravity.gateway.data.AntiRouteLevel
+import org.antigravity.gateway.data.AntiRouteScrubScope
+import org.antigravity.gateway.data.AntiRouteSeparator
 import org.antigravity.gateway.data.ConfigRepository
+import org.antigravity.gateway.data.GuardSettings
+import org.antigravity.gateway.data.ModelReportMode
 import org.antigravity.gateway.data.CryptoProvider
 import org.antigravity.gateway.data.JvmSoftwareCryptoProvider
 import org.junit.After
@@ -152,6 +157,72 @@ class ConfigRepositoryTest {
         // Update to invalid port falls back to default 38472
         val fallback = repository.updatePort(-5)
         assertEquals(38472, fallback.port)
+    }
+
+    @Test
+    fun testGuardDefaultsAndPersistence() {
+        val initial = repository.load()
+        assertEquals(2, initial.schemaVersion)
+        assertEquals(AntiRouteLevel.WIRE, initial.guard.antiRouteLevel)
+        assertTrue(initial.guard.wireEscape)
+        assertTrue(initial.guard.scrub)
+        assertFalse(initial.guard.split)
+        assertEquals(AntiRouteScrubScope.LEADING, initial.guard.scrubScope)
+        assertFalse(initial.guard.demotePrefill)
+        assertEquals(AntiRouteSeparator.HYPHEN, initial.guard.separator)
+        assertEquals(ModelReportMode.HEADERS, initial.guard.modelReport)
+        assertEquals("antigravity_model", initial.guard.modelReportKey)
+
+        val updated = repository.updateGuard(
+            GuardSettings(
+                antiRouteLevel = AntiRouteLevel.DEEP,
+                wireEscape = true,
+                scrub = true,
+                split = true,
+                scrubScope = AntiRouteScrubScope.ALL,
+                demotePrefill = true,
+                separator = AntiRouteSeparator.WORD_JOINER,
+                modelReport = ModelReportMode.BOTH,
+                modelReportKey = "served_model"
+            )
+        )
+        assertEquals(AntiRouteLevel.DEEP, updated.guard.antiRouteLevel)
+
+        val reloaded = ConfigRepository(configFile, cryptoProvider).load()
+        assertEquals(2, reloaded.schemaVersion)
+        assertEquals(AntiRouteLevel.DEEP, reloaded.guard.antiRouteLevel)
+        assertEquals(AntiRouteScrubScope.ALL, reloaded.guard.scrubScope)
+        assertEquals(AntiRouteSeparator.WORD_JOINER, reloaded.guard.separator)
+        assertEquals(ModelReportMode.BOTH, reloaded.guard.modelReport)
+        assertEquals("served_model", reloaded.guard.modelReportKey)
+        assertTrue(reloaded.guard.split)
+        assertTrue(reloaded.guard.demotePrefill)
+    }
+
+    @Test
+    fun testLegacyConfigWithoutGuardFallsBackToDefaults() {
+        // A file written by an older build carries no guard block and no schema 2 marker.
+        val legacy = buildString {
+            append("{\n")
+            append("  \"schemaVersion\": 1,\n")
+            append("  \"currentProviderId\": \"p1\",\n")
+            append("  \"downstreamKeyCiphertext\": \"").append(cryptoProvider.encrypt("sk-agw-legacy")).append("\",\n")
+            append("  \"port\": 39444,\n")
+            append("  \"providers\": [\n")
+            append("    {\"id\": \"p1\", \"name\": \"旧供应商\", \"upstreamUrl\": \"https://legacy.example\", ")
+            append("\"upstreamKeyCiphertext\": \"").append(cryptoProvider.encrypt("sk-legacy")).append("\"}\n")
+            append("  ]\n")
+            append("}\n")
+        }
+        configFile.writeText(legacy)
+
+        val loaded = ConfigRepository(configFile, cryptoProvider).load()
+        assertEquals(39444, loaded.port)
+        assertEquals("旧供应商", loaded.getCurrentProvider()?.name)
+        assertEquals("sk-legacy", loaded.getCurrentProvider()?.upstreamKey)
+        assertEquals(AntiRouteLevel.WIRE, loaded.guard.antiRouteLevel)
+        assertEquals(ModelReportMode.HEADERS, loaded.guard.modelReport)
+        assertEquals("antigravity_model", loaded.guard.modelReportKey)
     }
 
     @Test

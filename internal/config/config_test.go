@@ -167,3 +167,90 @@ func TestConfigFailClosed(t *testing.T) {
 		})
 	}
 }
+
+func TestEntropyConfigDefaults(t *testing.T) {
+	base := map[string]string{
+		"UPSTREAM_BASE_URL": "https://api.example.com",
+		"UPSTREAM_API_KEY":  "sk-123",
+		"ADMIN_API_KEY":     "admin-key-123456",
+		"KEY_HMAC_SECRET":   "hmac-secret-123456",
+	}
+
+	cfg, err := Load(func(k string) string { return base[k] })
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.EntropyLevel != "standard" {
+		t.Errorf("default entropy level = %q, want standard", cfg.EntropyLevel)
+	}
+	if !cfg.EntropyLayout {
+		t.Error("standard level should enable layout randomization by default")
+	}
+	if cfg.EntropyInvisible {
+		t.Error("standard level should not enable invisible separators by default")
+	}
+	if cfg.EntropyParamJitter {
+		t.Error("standard level should not enable parameter jitter by default")
+	}
+	if cfg.SyntheticToolPrefix != "" {
+		t.Errorf("tool prefix should default to empty (entropy mode), got %q", cfg.SyntheticToolPrefix)
+	}
+}
+
+func TestEntropyConfigOverrides(t *testing.T) {
+	base := map[string]string{
+		"UPSTREAM_BASE_URL":    "https://api.example.com",
+		"UPSTREAM_API_KEY":     "sk-123",
+		"ADMIN_API_KEY":        "admin-key-123456",
+		"KEY_HMAC_SECRET":      "hmac-secret-123456",
+		"ENTROPY_LEVEL":        "off",
+		"ENTROPY_LAYOUT":       "true",
+		"ENTROPY_INVISIBLE":    "true",
+		"ENTROPY_PARAM_JITTER": "1",
+		"ENTROPY_SEED":         "424242",
+	}
+
+	cfg, err := Load(func(k string) string { return base[k] })
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.EntropyLevel != "off" {
+		t.Errorf("entropy level = %q, want off", cfg.EntropyLevel)
+	}
+	if !cfg.EntropyLayout || !cfg.EntropyInvisible || !cfg.EntropyParamJitter {
+		t.Errorf("explicit overrides were not applied: %+v", cfg)
+	}
+	if cfg.EntropySeed != 424242 {
+		t.Errorf("entropy seed = %d, want 424242", cfg.EntropySeed)
+	}
+}
+
+func TestEntropyConfigRejectsInvalidValues(t *testing.T) {
+	base := map[string]string{
+		"UPSTREAM_BASE_URL": "https://api.example.com",
+		"UPSTREAM_API_KEY":  "sk-123",
+		"ADMIN_API_KEY":     "admin-key-123456",
+		"KEY_HMAC_SECRET":   "hmac-secret-123456",
+	}
+
+	for _, tc := range []struct {
+		name string
+		env  map[string]string
+	}{
+		{name: "invalid level", env: map[string]string{"ENTROPY_LEVEL": "max"}},
+		{name: "invalid seed", env: map[string]string{"ENTROPY_SEED": "not-a-number"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			env := map[string]string{}
+			for k, v := range base {
+				env[k] = v
+			}
+			for k, v := range tc.env {
+				env[k] = v
+			}
+			if _, err := Load(func(k string) string { return env[k] }); err == nil {
+				t.Errorf("expected error for case %q", tc.name)
+			}
+		})
+	}
+}

@@ -18,7 +18,7 @@ import (
 )
 
 var (
-	Version   = "1.0.13"
+	Version   = "1.0.15"
 	GitCommit = "none"
 	BuildTime = "unknown"
 )
@@ -147,6 +147,11 @@ func main() {
 
 	// 3. Initialize Orchestrator
 	orch := recovery.NewOrchestrator(cfg, upstreamClient, keyMgr)
+	if err := orch.AntiRouteError(); err != nil {
+		keyMgr.Close()
+		fmt.Fprintf(os.Stderr, "anti-route configuration error: %v\n", err)
+		os.Exit(1)
+	}
 
 	// 4. Initialize Proxy Handler
 	proxyHandler := proxy.NewProxyHandler(cfg, keyMgr, upstreamClient)

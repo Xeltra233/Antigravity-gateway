@@ -21,6 +21,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.antigravity.gateway.R
 import org.antigravity.gateway.bridge.GatewayBridge
+import org.antigravity.gateway.data.AntiRouteLevel
+import org.antigravity.gateway.data.AntiRouteScrubScope
+import org.antigravity.gateway.data.AntiRouteSeparator
+import org.antigravity.gateway.data.GuardSettings
+import org.antigravity.gateway.data.ModelReportMode
 import org.antigravity.gateway.ui.GatewayState
 import org.antigravity.gateway.ui.MainActivity
 import java.net.HttpURLConnection
@@ -43,7 +48,8 @@ object GatewayServiceController {
         upstreamUrl: String,
         upstreamKey: String,
         downstreamKey: String,
-        port: Int = 38472
+        port: Int = 38472,
+        guard: GuardSettings = GuardSettings()
     ) {
         val intent = Intent(context, GatewayService::class.java).apply {
             action = GatewayService.ACTION_START
@@ -51,6 +57,15 @@ object GatewayServiceController {
             putExtra(GatewayService.EXTRA_UPSTREAM_KEY, upstreamKey)
             putExtra(GatewayService.EXTRA_DOWNSTREAM_KEY, downstreamKey)
             putExtra(GatewayService.EXTRA_PORT, port)
+            putExtra(GatewayService.EXTRA_GUARD_LEVEL, guard.antiRouteLevel.wireName)
+            putExtra(GatewayService.EXTRA_GUARD_WIRE_ESCAPE, guard.wireEscape)
+            putExtra(GatewayService.EXTRA_GUARD_SCRUB, guard.scrub)
+            putExtra(GatewayService.EXTRA_GUARD_SPLIT, guard.split)
+            putExtra(GatewayService.EXTRA_GUARD_SCRUB_SCOPE, guard.scrubScope.wireName)
+            putExtra(GatewayService.EXTRA_GUARD_DEMOTE_PREFILL, guard.demotePrefill)
+            putExtra(GatewayService.EXTRA_GUARD_SEPARATOR, guard.separator.wireName)
+            putExtra(GatewayService.EXTRA_MODEL_REPORT, guard.modelReport.wireName)
+            putExtra(GatewayService.EXTRA_MODEL_REPORT_KEY, guard.modelReportKey)
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             context.startForegroundService(intent)
@@ -77,6 +92,15 @@ class GatewayService : Service() {
         const val EXTRA_UPSTREAM_KEY = "extra_upstream_key"
         const val EXTRA_DOWNSTREAM_KEY = "extra_downstream_key"
         const val EXTRA_PORT = "extra_port"
+        const val EXTRA_GUARD_LEVEL = "extra_guard_level"
+        const val EXTRA_GUARD_WIRE_ESCAPE = "extra_guard_wire_escape"
+        const val EXTRA_GUARD_SCRUB = "extra_guard_scrub"
+        const val EXTRA_GUARD_SPLIT = "extra_guard_split"
+        const val EXTRA_GUARD_SCRUB_SCOPE = "extra_guard_scrub_scope"
+        const val EXTRA_GUARD_DEMOTE_PREFILL = "extra_guard_demote_prefill"
+        const val EXTRA_GUARD_SEPARATOR = "extra_guard_separator"
+        const val EXTRA_MODEL_REPORT = "extra_model_report"
+        const val EXTRA_MODEL_REPORT_KEY = "extra_model_report_key"
 
         private const val NOTIFICATION_ID = 1001
         private const val CHANNEL_ID = "gateway_foreground_service"
@@ -98,8 +122,20 @@ class GatewayService : Service() {
                 val upKey = intent.getStringExtra(EXTRA_UPSTREAM_KEY) ?: ""
                 val downKey = intent.getStringExtra(EXTRA_DOWNSTREAM_KEY) ?: ""
                 val port = intent.getIntExtra(EXTRA_PORT, 38472)
+                val guard = GuardSettings(
+                    antiRouteLevel = AntiRouteLevel.fromName(intent.getStringExtra(EXTRA_GUARD_LEVEL)),
+                    wireEscape = intent.getBooleanExtra(EXTRA_GUARD_WIRE_ESCAPE, true),
+                    scrub = intent.getBooleanExtra(EXTRA_GUARD_SCRUB, true),
+                    split = intent.getBooleanExtra(EXTRA_GUARD_SPLIT, false),
+                    scrubScope = AntiRouteScrubScope.fromName(intent.getStringExtra(EXTRA_GUARD_SCRUB_SCOPE)),
+                    demotePrefill = intent.getBooleanExtra(EXTRA_GUARD_DEMOTE_PREFILL, false),
+                    separator = AntiRouteSeparator.fromName(intent.getStringExtra(EXTRA_GUARD_SEPARATOR)),
+                    modelReport = ModelReportMode.fromName(intent.getStringExtra(EXTRA_MODEL_REPORT)),
+                    modelReportKey = intent.getStringExtra(EXTRA_MODEL_REPORT_KEY)
+                        ?: GuardSettings.DEFAULT_MODEL_REPORT_KEY
+                )
 
-                startGatewayService(url, upKey, downKey, port)
+                startGatewayService(url, upKey, downKey, port, guard)
             }
             ACTION_STOP -> {
                 stopGatewayService()
@@ -115,7 +151,13 @@ class GatewayService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun startGatewayService(url: String, upKey: String, downKey: String, port: Int) {
+    private fun startGatewayService(
+        url: String,
+        upKey: String,
+        downKey: String,
+        port: Int,
+        guard: GuardSettings
+    ) {
         val notification = buildNotification("网关正在启动...")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             startForeground(
@@ -130,7 +172,7 @@ class GatewayService : Service() {
         GatewayServiceController.updateState(GatewayState.STARTING, "正在启动网关核心...")
 
         serviceScope.launch {
-            val result = GatewayBridge.startGateway(url, upKey, downKey, port)
+            val result = GatewayBridge.startGateway(url, upKey, downKey, port, guard)
             if (result.isSuccess) {
                 // Poll healthz to ensure port is actively listening
                 var isHealthy = false

@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"context"
+	crand "crypto/rand"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -12,12 +13,35 @@ import (
 	"time"
 
 	"antigravity-gateway/internal/config"
+	"antigravity-gateway/internal/entropy"
 	"antigravity-gateway/internal/limits"
 )
 
+// upstreamUserAgents is a small pool of realistic browser profiles. The header
+// value is rotated per request so outbound traffic does not share one fixed
+// client signature.
+var upstreamUserAgents = []string{
+	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+	"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+	"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+	"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Safari/605.1.15",
+	"Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:133.0) Gecko/20100101 Firefox/133.0",
+	"Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
+	"Mozilla/5.0 (iPhone; CPU iPhone OS 18_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.1 Mobile/15E148 Safari/604.1",
+	"Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36",
+}
+
+var upstreamAcceptHeaders = []string{
+	"application/json, text/event-stream",
+	"application/json",
+	"application/json, text/plain, text/event-stream",
+	"application/json; charset=utf-8, text/event-stream",
+}
+
 type UpstreamClient struct {
-	cfg        *config.Config
-	httpClient *http.Client
+	cfg            *config.Config
+	httpClient     *http.Client
+	entropyEnabled bool
 
 	modelsCacheMu sync.RWMutex
 	modelsCache   []byte
@@ -50,9 +74,27 @@ func NewUpstreamClient(cfg *config.Config) *UpstreamClient {
 	}
 
 	return &UpstreamClient{
-		cfg:        cfg,
-		httpClient: httpClient,
+		cfg:            cfg,
+		httpClient:     httpClient,
+		entropyEnabled: entropy.ParseLevel(cfg.EntropyLevel).Enabled(),
 	}
+}
+
+// fingerprintHeader returns one value from pool. When request-shape entropy is
+// enabled the choice is drawn from the OS CSPRNG; otherwise the first entry is
+// kept for stability.
+func (c *UpstreamClient) fingerprintHeader(pool []string) string {
+	if len(pool) == 0 {
+		return ""
+	}
+	if !c.entropyEnabled {
+		return pool[0]
+	}
+	var b [1]byte
+	if _, err := crand.Read(b[:]); err != nil {
+		return pool[0]
+	}
+	return pool[int(b[0])%len(pool)]
 }
 
 func (c *UpstreamClient) NewUpstreamRequest(ctx context.Context, method, targetURL string, body io.Reader, reqID string) (*http.Request, error) {
@@ -61,10 +103,10 @@ func (c *UpstreamClient) NewUpstreamRequest(ctx context.Context, method, targetU
 		return nil, fmt.Errorf("failed to create upstream request: %w", err)
 	}
 
-	// Standard content type, accept & user-agent
+	// Standard content type plus a rotated client fingerprint.
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json, text/event-stream")
-	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36")
+	req.Header.Set("Accept", c.fingerprintHeader(upstreamAcceptHeaders))
+	req.Header.Set("User-Agent", c.fingerprintHeader(upstreamUserAgents))
 	// Upstream authentication - NEVER forward downstream auth
 	if c.cfg.UpstreamAuthMode == "bearer" && c.cfg.UpstreamAPIKey != "" {
 		req.Header.Set("Authorization", "Bearer "+c.cfg.UpstreamAPIKey)

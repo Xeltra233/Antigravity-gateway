@@ -1,5 +1,7 @@
 package org.antigravity.gateway.bridge
 
+import org.antigravity.gateway.data.GuardSettings
+
 object GatewayBridge {
     private var isLoaded = false
     private var loadError: Throwable? = null
@@ -21,12 +23,27 @@ object GatewayBridge {
         upstreamUrl: String,
         upstreamKey: String,
         downstreamKey: String,
-        port: Int = 38472
+        port: Int = 38472,
+        guard: GuardSettings = GuardSettings()
     ): Result<Unit> {
         if (!isLoaded) {
             return Result.failure(IllegalStateException("Native library not loaded: ${loadError?.message}"))
         }
-        val code = nativeStartGateway(upstreamUrl, upstreamKey, downstreamKey, port)
+        val code = nativeStartGateway(
+            upstreamUrl,
+            upstreamKey,
+            downstreamKey,
+            port,
+            guard.antiRouteLevel.wireName,
+            guard.wireEscape,
+            guard.scrub,
+            guard.split,
+            guard.scrubScope.wireName,
+            guard.demotePrefill,
+            guard.separator.wireName,
+            guard.modelReport.wireName,
+            guard.modelReportKey
+        )
         return if (code == 0) {
             Result.success(Unit)
         } else {
@@ -66,7 +83,16 @@ object GatewayBridge {
         upstreamUrl: String,
         upstreamKey: String,
         downstreamKey: String,
-        port: Int
+        port: Int,
+        antiRouteLevel: String,
+        wireEscape: Boolean,
+        scrub: Boolean,
+        split: Boolean,
+        scrubScope: String,
+        demotePrefill: Boolean,
+        separator: String,
+        modelReport: String,
+        modelReportKey: String
     ): Int
 
     @JvmStatic

@@ -2,12 +2,13 @@ package synthetic
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
+	"sync/atomic"
 
 	"antigravity-gateway/internal/config"
+	"antigravity-gateway/internal/entropy"
 )
 
 type InjectedRequest struct {
@@ -17,17 +18,27 @@ type InjectedRequest struct {
 	IsStreaming        bool
 	HasDownstreamTools bool
 	ForcedRealTool     bool
+	EntropyTag         string
 }
 
 type RequestInjector struct {
 	cfg         *config.Config
 	modelFilter *ModelFilter
+	entropyOpts entropy.Options
+	seedSeq     atomic.Uint64
 }
 
 func NewRequestInjector(cfg *config.Config) *RequestInjector {
 	return &RequestInjector{
 		cfg:         cfg,
 		modelFilter: NewModelFilter(cfg.TextModelPattern, cfg.NonTextModelPattern),
+		entropyOpts: entropy.Options{
+			Level:       entropy.ParseLevel(cfg.EntropyLevel),
+			Layout:      cfg.EntropyLayout,
+			Invisible:   cfg.EntropyInvisible,
+			ParamJitter: cfg.EntropyParamJitter,
+			Seed:        cfg.EntropySeed,
+		},
 	}
 }
 
@@ -35,27 +46,33 @@ func (inj *RequestInjector) GetModelFilter() *ModelFilter {
 	return inj.modelFilter
 }
 
-func (inj *RequestInjector) GenerateUniqueToolName(existingToolNames map[string]bool) (string, error) {
-	prefix := inj.cfg.SyntheticToolPrefix
-	if prefix == "" {
-		prefix = "agw_emit_"
+// NewSource returns a fresh per-request random stream. When a base seed is
+// configured it is advanced by a per-request counter, so a run stays
+// reproducible while individual requests still differ from one another.
+func (inj *RequestInjector) NewSource() (*entropy.Source, error) {
+	opts := inj.entropyOpts
+	if opts.Seed != 0 {
+		opts.Seed = opts.Seed*0x9e3779b97f4a7c15 + inj.seedSeq.Add(1)
 	}
-	for i := 0; i < 100; i++ {
-		// 96 bits = 12 bytes = 24 hex characters
-		nonceBytes := make([]byte, 12)
-		if _, err := rand.Read(nonceBytes); err != nil {
-			return "", fmt.Errorf("failed to generate random nonce: %w", err)
-		}
-		nonce := hex.EncodeToString(nonceBytes)
-		toolName := prefix + nonce
-		if !existingToolNames[toolName] {
-			return toolName, nil
-		}
-	}
-	return "", fmt.Errorf("failed to generate unique synthetic tool name after 100 attempts")
+	return entropy.New(opts)
 }
 
-func (inj *RequestInjector) BuildSyntheticTool(toolName string) map[string]any {
+// LayoutEnabled reports whether wire-layout randomization is active.
+func (inj *RequestInjector) LayoutEnabled() bool {
+	return inj.entropyOpts.Layout
+}
+
+func (inj *RequestInjector) GenerateUniqueToolName(src *entropy.Source, existingToolNames map[string]bool) (string, error) {
+	if src == nil {
+		var err error
+		if src, err = inj.NewSource(); err != nil {
+			return "", fmt.Errorf("failed to create entropy source: %w", err)
+		}
+	}
+	return inj.buildToolName(src, existingToolNames)
+}
+
+func (inj *RequestInjector) BuildSyntheticTool(src *entropy.Source, toolName string) map[string]any {
 	params := map[string]any{
 		"type": "object",
 		"properties": map[string]any{
@@ -72,7 +89,7 @@ func (inj *RequestInjector) BuildSyntheticTool(toolName string) map[string]any {
 
 	fn := map[string]any{
 		"name":        toolName,
-		"description": "Use this transport tool exactly once for the final user-visible answer. Put the complete answer in content. Never wrap genuine tool calls in it.",
+		"description": inj.buildToolDescription(src),
 		"parameters":  params,
 	}
 
@@ -86,20 +103,17 @@ func (inj *RequestInjector) BuildSyntheticTool(toolName string) map[string]any {
 	}
 }
 
-func (inj *RequestInjector) BuildControlMessage(toolName string) map[string]any {
+func (inj *RequestInjector) BuildControlMessage(src *entropy.Source, toolName string) map[string]any {
 	role := inj.cfg.ControlMessageRole
 	if role == "" {
 		role = "user"
 	}
 
-	prompt := inj.cfg.ControlPromptTemplate
-	if prompt == "" {
-		prompt = fmt.Sprintf(
-			"Always use tool `%s` to output your final reply in its `content` argument. Do not output anything outside this tool call.",
-			toolName,
-		)
+	var prompt string
+	if inj.cfg.ControlPromptTemplate != "" {
+		prompt = fmt.Sprintf(inj.cfg.ControlPromptTemplate, toolName)
 	} else {
-		prompt = fmt.Sprintf(prompt, toolName)
+		prompt = inj.buildControlPrompt(src, toolName)
 	}
 
 	return map[string]any{
@@ -111,7 +125,7 @@ func (inj *RequestInjector) BuildControlMessage(toolName string) map[string]any 
 // SanitizeAndInjectMessages ensures that:
 // 1. Synthetic control message is properly injected according to configured position.
 // 2. Upstream Gemini/CPA constraints are strictly satisfied: requests must never end with assistant/model turn or be left without a user turn after system messages are extracted.
-func (inj *RequestInjector) SanitizeAndInjectMessages(messages []any, controlMsg map[string]any) []any {
+func (inj *RequestInjector) SanitizeAndInjectMessages(src *entropy.Source, messages []any, controlMsg map[string]any) []any {
 	// Find the last conversational role (ignoring trailing system/developer messages)
 	lastConversationalRole := ""
 	for i := len(messages) - 1; i >= 0; i-- {
@@ -126,6 +140,7 @@ func (inj *RequestInjector) SanitizeAndInjectMessages(messages []any, controlMsg
 
 	needsUserTurn := lastConversationalRole == "assistant" || lastConversationalRole == "model" || lastConversationalRole == ""
 	controlContent, _ := controlMsg["content"].(string)
+	continuation := inj.buildContinuation(src, "Please continue and fulfill the request.")
 
 	switch inj.cfg.ControlMessagePosition {
 	case "head":
@@ -133,7 +148,7 @@ func (inj *RequestInjector) SanitizeAndInjectMessages(messages []any, controlMsg
 		if needsUserTurn {
 			messages = append(messages, map[string]any{
 				"role":    "user",
-				"content": "Please continue and fulfill the request.",
+				"content": continuation,
 			})
 		}
 	case "system_tail":
@@ -158,7 +173,7 @@ func (inj *RequestInjector) SanitizeAndInjectMessages(messages []any, controlMsg
 		if needsUserTurn {
 			messages = append(messages, map[string]any{
 				"role":    "user",
-				"content": "Please continue and fulfill the request.",
+				"content": continuation,
 			})
 		}
 	default: // "tail"
@@ -184,6 +199,11 @@ func (inj *RequestInjector) Inject(rawBody []byte) (*InjectedRequest, error) {
 }
 
 func (inj *RequestInjector) InjectContext(ctx context.Context, rawBody []byte) (*InjectedRequest, error) {
+	src, err := inj.NewSource()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create entropy source: %w", err)
+	}
+
 	var bodyMap map[string]any
 	if err := json.Unmarshal(rawBody, &bodyMap); err != nil {
 		return nil, fmt.Errorf("invalid json in request body: %w", err)
@@ -210,10 +230,10 @@ func (inj *RequestInjector) InjectContext(ctx context.Context, rawBody []byte) (
 			if lastConversationalRole == "assistant" || lastConversationalRole == "model" || lastConversationalRole == "" {
 				messages = append(messages, map[string]any{
 					"role":    "user",
-					"content": "Please continue.",
+					"content": inj.buildContinuation(src, "Please continue."),
 				})
 				bodyMap["messages"] = messages
-				if tb, err := json.Marshal(bodyMap); err == nil {
+				if tb, err := inj.reencode(bodyMap, src); err == nil {
 					rawBody = tb
 				}
 			}
@@ -226,6 +246,7 @@ func (inj *RequestInjector) InjectContext(ctx context.Context, rawBody []byte) (
 			IsStreaming:        isStreaming,
 			HasDownstreamTools: false,
 			ForcedRealTool:     false,
+			EntropyTag:         src.Tag(),
 		}, nil
 	}
 
@@ -248,13 +269,13 @@ func (inj *RequestInjector) InjectContext(ctx context.Context, rawBody []byte) (
 	}
 
 	// Generate unique synthetic tool name
-	toolName, err := inj.GenerateUniqueToolName(existingToolNames)
+	toolName, err := inj.GenerateUniqueToolName(src, existingToolNames)
 	if err != nil {
 		return nil, err
 	}
 
 	// Append synthetic tool to tools
-	syntheticTool := inj.BuildSyntheticTool(toolName)
+	syntheticTool := inj.BuildSyntheticTool(src, toolName)
 	tools := append(rawTools, syntheticTool)
 	bodyMap["tools"] = tools
 
@@ -284,10 +305,12 @@ func (inj *RequestInjector) InjectContext(ctx context.Context, rawBody []byte) (
 		messages = append(messages, mList...)
 	}
 
-	controlMsg := inj.BuildControlMessage(toolName)
-	bodyMap["messages"] = inj.SanitizeAndInjectMessages(messages, controlMsg)
+	controlMsg := inj.BuildControlMessage(src, toolName)
+	bodyMap["messages"] = inj.SanitizeAndInjectMessages(src, messages, controlMsg)
 
-	transformed, err := json.Marshal(bodyMap)
+	inj.applySamplingJitter(bodyMap, src)
+
+	transformed, err := inj.reencode(bodyMap, src)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal transformed request: %w", err)
 	}
@@ -299,5 +322,42 @@ func (inj *RequestInjector) InjectContext(ctx context.Context, rawBody []byte) (
 		IsStreaming:        isStreaming,
 		HasDownstreamTools: hasDownstreamTools,
 		ForcedRealTool:     forcedRealTool,
+		EntropyTag:         src.Tag(),
 	}, nil
+}
+
+func (inj *RequestInjector) reencode(bodyMap map[string]any, src *entropy.Source) ([]byte, error) {
+	return MarshalShaped(bodyMap, src, inj.entropyOpts.Layout)
+}
+
+// applySamplingJitter nudges sampling parameters by a sub-percent amount so a
+// fixed parameter tuple is not itself a stable request signature. Values stay
+// inside each parameter's valid range and keep their original type.
+func (inj *RequestInjector) applySamplingJitter(bodyMap map[string]any, src *entropy.Source) {
+	if src == nil || !src.ParamJitter() {
+		return
+	}
+	jitter := func(key string, span, min, max float64) {
+		raw, ok := bodyMap[key]
+		if !ok {
+			return
+		}
+		value, ok := raw.(float64)
+		if !ok {
+			return
+		}
+		delta := (src.Float64()*2 - 1) * span
+		next := math.Round((value+delta)*1000) / 1000
+		if next < min {
+			next = min
+		}
+		if next > max {
+			next = max
+		}
+		bodyMap[key] = next
+	}
+	jitter("temperature", 0.01, 0, 2)
+	jitter("top_p", 0.005, 0, 1)
+	jitter("presence_penalty", 0.01, -2, 2)
+	jitter("frequency_penalty", 0.01, -2, 2)
 }
