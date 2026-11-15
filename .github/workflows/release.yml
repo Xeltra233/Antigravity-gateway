@@ -158,7 +158,18 @@ jobs:
           APK=$(ls android/app/build/outputs/apk/release/antigravity-gateway-*.apk | head -1)
           BT=$(ls -d "${ANDROID_HOME:-$ANDROID_SDK_ROOT}"/build-tools/* | sort -V | tail -1)
           "$BT/apksigner" verify --print-certs "$APK" | tee /tmp/certs.txt
-          grep -i "Signer #1 certificate SHA-256 digest" /tmp/certs.txt
+          # apksigner changed this label between build-tools releases ("Signer #1 certificate" in
+          # older tools, "V2 Signer: certificate" in newer ones), so match the stable tail only.
+          DIGEST=$(grep -oiE 'certificate SHA-256 digest: [0-9a-f]{64}' /tmp/certs.txt | head -1 | awk '{print $NF}')
+          if [ -z "$DIGEST" ]; then
+            echo "::error::Could not read a SHA-256 signing certificate from the APK."
+            exit 1
+          fi
+          if grep -qi 'CN=Android Debug' /tmp/certs.txt; then
+            echo "::error::APK is signed with the debug key rather than the release key."
+            exit 1
+          fi
+          echo "APK signing certificate SHA-256: $DIGEST"
 
       - name: Upload Android APK Artifact
         uses: actions/upload-artifact@v4
