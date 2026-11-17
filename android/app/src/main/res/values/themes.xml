@@ -24,6 +24,8 @@
         <item name="android:statusBarColor">#FBFBFC</item>
         <item name="android:navigationBarColor">#FBFBFC</item>
         <item name="android:windowLightStatusBar">true</item>
+        <!-- No UI click sounds: the shell is silent by design. -->
+        <item name="android:soundEffectsEnabled">false</item>
         <item name="android:textColorPrimary">#17181C</item>
         <item name="android:textColorSecondary">#767D87</item>
         <item name="android:textColorHint">#8B9199</item>
@@ -35,6 +37,11 @@
         <item name="agwFieldStrokeWidth">1dp</item>
         <item name="agwFieldStrokeWidthFocused">1.6dp</item>
         <item name="agwTopBar">#FBFBFC</item>
+        <item name="agwDivider">#ECEEF1</item>
+        <item name="agwIconTint">#3A3D44</item>
+        <item name="agwChevron">#9AA1AB</item>
+        <item name="agwSwitchOn">#2BB89A</item>
+        <item name="agwSwitchOff">#DCDFE4</item>
     </style>
 
     <!-- 极简黑 -->
@@ -54,6 +61,7 @@
         <item name="android:statusBarColor">#0F1013</item>
         <item name="android:navigationBarColor">#0F1013</item>
         <item name="android:windowLightStatusBar">false</item>
+        <item name="android:soundEffectsEnabled">false</item>
         <item name="android:textColorPrimary">#ECEEF3</item>
         <item name="android:textColorSecondary">#A8AEB9</item>
         <item name="android:textColorHint">#7D838E</item>
@@ -65,6 +73,11 @@
         <item name="agwFieldStrokeWidth">1dp</item>
         <item name="agwFieldStrokeWidthFocused">1.6dp</item>
         <item name="agwTopBar">#0F1013</item>
+        <item name="agwDivider">#23252B</item>
+        <item name="agwIconTint">#D8DCE3</item>
+        <item name="agwChevron">#7D838E</item>
+        <item name="agwSwitchOn">#2FCFAE</item>
+        <item name="agwSwitchOff">#3A3D45</item>
     </style>
 
     <!-- 手绘线稿 -->
@@ -84,6 +97,7 @@
         <item name="android:statusBarColor">#E4DCCB</item>
         <item name="android:navigationBarColor">#E4DCCB</item>
         <item name="android:windowLightStatusBar">true</item>
+        <item name="android:soundEffectsEnabled">false</item>
         <item name="android:textColorPrimary">#3A4150</item>
         <item name="android:textColorSecondary">#6F7787</item>
         <item name="android:textColorHint">#8D8578</item>
@@ -95,6 +109,11 @@
         <item name="agwFieldStrokeWidth">1.6dp</item>
         <item name="agwFieldStrokeWidthFocused">2dp</item>
         <item name="agwTopBar">#E4DCCB</item>
+        <item name="agwDivider">#B9AF97</item>
+        <item name="agwIconTint">#3A4150</item>
+        <item name="agwChevron">#6F7787</item>
+        <item name="agwSwitchOn">#6F9DD8</item>
+        <item name="agwSwitchOff">#C9C3AE</item>
     </style>
 
     <!-- 丝绸缎面 -->
@@ -114,6 +133,7 @@
         <item name="android:statusBarColor">#04060B</item>
         <item name="android:navigationBarColor">#04060B</item>
         <item name="android:windowLightStatusBar">false</item>
+        <item name="android:soundEffectsEnabled">false</item>
         <item name="android:textColorPrimary">#EEF2FA</item>
         <item name="android:textColorSecondary">#A6B2C9</item>
         <item name="android:textColorHint">#7D8BA5</item>
@@ -125,6 +145,22 @@
         <item name="agwFieldStrokeWidth">1dp</item>
         <item name="agwFieldStrokeWidthFocused">1.6dp</item>
         <item name="agwTopBar">#A604060B</item>
+        <item name="agwDivider">#1AFFFFFF</item>
+        <item name="agwIconTint">#EEF2FA</item>
+        <item name="agwChevron">#7286A6</item>
+        <item name="agwSwitchOn">#7AA2FF</item>
+        <item name="agwSwitchOff">#33FFFFFF</item>
+    </style>
+
+    <!-- Rows open this dialog: a dark panel over the silk, matching the rest of the shell. -->
+    <style name="Theme.Agw.Dialog" parent="Theme.MaterialComponents.Dialog.Alert">
+        <item name="colorSurface">#F2141B29</item>
+        <item name="colorPrimary">#7AA2FF</item>
+        <item name="colorAccent">#7AA2FF</item>
+        <item name="android:textColorPrimary">#EEF2FA</item>
+        <item name="android:textColorSecondary">#A6B2C9</item>
+        <item name="android:windowBackground">@drawable/pv_dialog_bg</item>
+        <item name="android:soundEffectsEnabled">false</item>
     </style>
 
 </resources>

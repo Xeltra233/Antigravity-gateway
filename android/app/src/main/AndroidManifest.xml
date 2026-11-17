@@ -30,6 +30,11 @@
             </intent-filter>
         </activity>
 
+        <!-- Static layout comparison harness; not reachable from the app's own UI. -->
+        <activity
+            android:name=".ui.PreviewAcrActivity"
+            android:exported="true" />
+
         <service
             android:name=".service.GatewayService"
             android:exported="false"

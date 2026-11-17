@@ -363,7 +363,10 @@
       // The phase walks at a slightly different rate in different regions.
       // That rate difference is what turns a slide into a roll; the average
       // pace stays where it was.
-      float tp = t * (1.0 + 0.40 * uChurn * sin(q.x * 2.55 + q.y * 1.85 + t * 0.21));
+      // Integrated form of that modulation. The speed is still 1 + A sin(...), but the phase
+      // offset stays inside 0.40*uChurn/0.21 rad instead of growing with t, which is what kept
+      // curling the folds into rings after a minute or two.
+      float tp = t - (0.40 * uChurn / 0.21) * cos(q.x * 2.55 + q.y * 1.85 + t * 0.21);
 
       float s = sqrt(max(silk(q, tp, grain, uFold), 0.0));
       float d = silkd(q, tp, uFold);

@@ -179,6 +179,22 @@ class ConfigRepository(
         return updated
     }
 
+    /** Writes the upstream pair for one provider, whichever row the detail page was opened from. */
+    @Synchronized
+    fun updateProviderUpstream(providerId: String, upstreamUrl: String, upstreamKey: String): GatewayConfig {
+        val current = load()
+        if (current.providers.none { it.id == providerId }) return current
+        val updatedProviders = current.providers.map {
+            if (it.id == providerId) {
+                it.copy(upstreamUrl = upstreamUrl.trim(), upstreamKey = upstreamKey.trim())
+            } else {
+                it
+            }
+        }
+        val updated = current.copy(providers = updatedProviders)
+        save(updated)
+        return updated
+    }
     @Synchronized
     fun selectProvider(providerId: String): GatewayConfig {
         val current = load()
@@ -243,6 +259,36 @@ class ConfigRepository(
             currentProviderId = newCurrentId,
             providers = updatedList
         )
+        save(updated)
+        return updated
+    }
+
+    /**
+     * Persists the order a drag produced. Ids that no longer exist are ignored and providers missing
+     * from [orderedIds] keep their previous relative position at the end, so a stale adapter can
+     * never drop a provider.
+     */
+    @Synchronized
+    fun reorderProviders(orderedIds: List<String>): GatewayConfig {
+        val current = load()
+        val visibleIds = orderedIds.toSet()
+        val byId = current.providers.associateBy { it.id }
+        val incoming = orderedIds.mapNotNull { byId[it] }
+        if (incoming.isEmpty()) return current
+        // Only the rows the list actually shows take a new order. The provider that is kept out of
+        // the list (the one in use) keeps its slot, so a drag can never shuffle it to the bottom.
+        val reordered = ArrayList<Provider>(current.providers.size)
+        var next = 0
+        for (provider in current.providers) {
+            if (provider.id in visibleIds && next < incoming.size) {
+                reordered.add(incoming[next])
+                next++
+            } else {
+                reordered.add(provider)
+            }
+        }
+        if (reordered.map { it.id } == current.providers.map { it.id }) return current
+        val updated = current.copy(providers = reordered)
         save(updated)
         return updated
     }

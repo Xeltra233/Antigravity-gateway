@@ -61,7 +61,7 @@ class SketchButtonDrawable(private val density: Float) : Drawable() {
         canvas.save()
         canvas.clipPath(clip)
 
-        fillPaint.color = SketchSpec.PENCIL_TINT
+        fillPaint.color = SketchSpec.BUTTON_FILL
         canvas.drawRect(rect, fillPaint)
 
         drawHatch(canvas, generator)
@@ -97,9 +97,11 @@ class SketchButtonDrawable(private val density: Float) : Drawable() {
 
             val fibres = if (generator.next() > 0.35f) 2 else 3
             for (index in 0 until fibres) {
-                paint.color = SketchSpec.PENCIL_BLUES[(generator.next() * SketchSpec.PENCIL_BLUES.size).toInt()
-                    .coerceIn(0, SketchSpec.PENCIL_BLUES.size - 1)]
-                paint.alpha = (generator.range(0.40f, 0.80f) * 255).toInt()
+                paint.color = SketchSpec.BUTTON_HATCH[(generator.next() * SketchSpec.BUTTON_HATCH.size).toInt()
+                    .coerceIn(0, SketchSpec.BUTTON_HATCH.size - 1)]
+                // The per-colour alpha carries the weight; the jitter only varies within it, so a
+                // light hatch stays light instead of being overridden to a fixed 40-80%.
+                paint.alpha = (android.graphics.Color.alpha(paint.color) * generator.range(0.55f, 1.0f)).toInt()
                 paint.strokeWidth = generator.range(0.75f, 1.75f) * density
 
                 val offsetX = generator.range(-0.9f, 0.9f) * density
@@ -165,6 +167,13 @@ class SketchButtonDrawable(private val density: Float) : Drawable() {
 
     @Deprecated("Deprecated in Java")
     override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
+
+    /** Lets a ripple clone this drawable instead of logging a LayerDrawable ownership warning. */
+    override fun getConstantState(): Drawable.ConstantState = object : Drawable.ConstantState() {
+        override fun newDrawable(): Drawable = SketchButtonDrawable(density)
+
+        override fun getChangingConfigurations(): Int = 0
+    }
 
     private companion object {
         const val INSET_DP = 1.4f

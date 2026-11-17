@@ -68,7 +68,7 @@
 
 #### 场景 A：Android 用户（推荐普通用户）
 
-1. 打开 [Releases](https://github.com/Xeltra233/Antigravity-gateway/releases/latest)，下载 `antigravity-gateway-v<版本>.apk`（当前为 `v1.0.20`）。
+1. 打开 [Releases](https://github.com/Xeltra233/Antigravity-gateway/releases/latest)，下载 `antigravity-gateway-v<版本>.apk`（当前为 `v1.0.21`）。
 2. 在手机上安装 APK（首次安装需允许「安装未知来源应用」）。
 3. 打开应用 → 点击「切换/新建」填写上游供应商：
    - **上游地址**：如 `https://api.openai.com/v1`（或任何兼容 Chat Completions 的服务）
@@ -272,7 +272,7 @@ cd android
 ./gradlew :app:assembleRelease
 
 # 产物输出路径:
-# android/app/build/outputs/apk/release/antigravity-gateway-v1.0.20.apk
+# android/app/build/outputs/apk/release/antigravity-gateway-v1.0.21.apk
 ```
 
 ---
@@ -312,7 +312,7 @@ cd Antigravity-gateway
 - **查看版本信息**:
   ```bash
   ./gateway -v
-  # 输出: Antigravity Gateway version 1.0.20 (commit: ..., built: ...)
+  # 输出: Antigravity Gateway version 1.0.21 (commit: ..., built: ...)
   ```
 
 - **跨平台交叉编译 (在一台机器上为其他系统编译)**:
@@ -632,8 +632,8 @@ curl -X POST http://127.0.0.1:8080/admin/keys/key_7f8a91b2c3d4/revoke \
 
 ### 🛡️ 运维监控与健康检查
 
-- **存活探针 (Liveness)**: `GET /healthz` → 返回 `{"status":"ok","version":"1.0.20"}` (200 OK)
-- **就绪探针 (Readiness)**: `GET /readyz` → 返回 `{"status":"ready","version":"1.0.20"}` (200 OK)
+- **存活探针 (Liveness)**: `GET /healthz` → 返回 `{"status":"ok","version":"1.0.21"}` (200 OK)
+- **就绪探针 (Readiness)**: `GET /readyz` → 返回 `{"status":"ready","version":"1.0.21"}` (200 OK)
 - **Prometheus 监控指标**: `GET /metrics` → 输出请求总量、活跃请求数、过载拒绝、合成包装命中/修复/重试/冲突等指标。
 - **紧急回滚**: 若遇到突发未知上游格式异常，修改 `.env` 中的 `WRAPPER_MODE=off` 并重启网关，即可切换为原生纯透传模式。
 
@@ -665,7 +665,7 @@ Antigravity-gateway/
 ### 📦 版本与发布流程
 
 - **版本号**同时写入 4 处并保持一致：`android/app/build.gradle.kts`（`versionCode`/`versionName`）、`cmd/gateway/main.go`、`internal/*/engine.go`、本 README。
-- 推送形如 `v1.0.20` 的 **标签** 即触发 `.github/workflows/release.yml`：
+- 推送形如 `v1.0.21` 的 **标签** 即触发 `.github/workflows/release.yml`：
   1. 编译 Android APK（debug/release 双构建 + 单元测试 + lint）；
   2. 交叉编译 6 个服务端二进制（Linux/Windows/macOS × amd64/arm64）；
   3. 通过 `ldflags -X main.Version=<tag>` 把版本号与 commit SHA 注入二进制；
@@ -673,10 +673,10 @@ Antigravity-gateway/
 - **校验发布产物**：
 
 ```bash
-gh release view v1.0.20                                   # 资产列表
+gh release view v1.0.21                                   # 资产列表
 sha256sum -c checksums.txt                                # 校验下载文件
-antigravity-gateway --version                             # v1.0.20 (commit: ...)
-aapt2 dump badging antigravity-gateway-v1.0.20.apk | head -1   # APK 版本
+antigravity-gateway --version                             # v1.0.21 (commit: ...)
+aapt2 dump badging antigravity-gateway-v1.0.21.apk | head -1   # APK 版本
 ```
 
 - **升级约定**：已发布版本不再修改；每个变更批次递增补丁号并重新走完整验证（单元测试 → 真机/模拟器用例 → 发布校验）。
@@ -720,7 +720,7 @@ By embedding the high-performance Go native core (`libantigravity.so`) via JNI, 
 
 #### Option A — Android (end users)
 
-1. Download `antigravity-gateway-v<version>.apk` (currently `v1.0.20`) from [Releases](https://github.com/Xeltra233/Antigravity-gateway/releases/latest).
+1. Download `antigravity-gateway-v<version>.apk` (currently `v1.0.21`) from [Releases](https://github.com/Xeltra233/Antigravity-gateway/releases/latest).
 2. Install it (allow "install from unknown sources" the first time).
 3. Open the app → tap **切换/新建** to add an upstream provider: base URL (e.g. `https://api.openai.com/v1`) and your upstream API key.
 4. Tap **启动网关** and wait for the status card to show **网关运行中**.
@@ -843,7 +843,7 @@ adb pull /sdcard/Android/data/org.antigravity.gateway/files/crash-logs/ ./crash-
 cd android
 ./gradlew :app:testReleaseUnitTest
 ./gradlew :app:assembleRelease
-# Output APK: android/app/build/outputs/apk/release/antigravity-gateway-v1.0.20.apk
+# Output APK: android/app/build/outputs/apk/release/antigravity-gateway-v1.0.21.apk
 ```
 
 ---
@@ -1168,8 +1168,8 @@ The gateway is 100% compliant with standard OpenAI `/v1` endpoints.
 
 ### 🛡️ Health Checks & Observability
 
-- **Liveness Probe**: `GET /healthz` → returns `{"status":"ok","version":"1.0.20"}` (200 OK)
-- **Readiness Probe**: `GET /readyz` → returns `{"status":"ready","version":"1.0.20"}` (200 OK)
+- **Liveness Probe**: `GET /healthz` → returns `{"status":"ok","version":"1.0.21"}` (200 OK)
+- **Readiness Probe**: `GET /readyz` → returns `{"status":"ready","version":"1.0.21"}` (200 OK)
 - **Prometheus Metrics**: `GET /metrics` → exports standard metrics including request totals, latencies, active connections, and synthetic wrapper counts.
 - **Emergency Fallback**: Set `WRAPPER_MODE=off` in `.env` and restart the gateway to revert to transparent raw passthrough.
 
@@ -1209,10 +1209,10 @@ Antigravity-gateway/
 - Verify a release:
 
 ```bash
-gh release view v1.0.20
+gh release view v1.0.21
 sha256sum -c checksums.txt
-antigravity-gateway --version                                  # v1.0.20 (commit: ...)
-aapt2 dump badging antigravity-gateway-v1.0.20.apk | head -1    # APK version
+antigravity-gateway --version                                  # v1.0.21 (commit: ...)
+aapt2 dump badging antigravity-gateway-v1.0.21.apk | head -1    # APK version
 ```
 
 - Published versions are immutable: every change batch bumps the patch level and repeats the full verification chain (unit tests → device checks → release validation).

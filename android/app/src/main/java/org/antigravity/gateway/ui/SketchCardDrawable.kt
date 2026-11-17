@@ -29,7 +29,6 @@ class SketchCardDrawable(private val density: Float) : Drawable() {
     /** Gives the card a lift off the page; the page is darker, so the card needs a soft edge. */
     private val body = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = SketchSpec.PAPER
-        setShadowLayer(18f * density, 0f, 7f * density, SHADOW)
     }
 
     override fun onBoundsChange(bounds: Rect) {
@@ -90,9 +89,15 @@ class SketchCardDrawable(private val density: Float) : Drawable() {
     @Deprecated("Deprecated in Java")
     override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
 
+    /** Lets a ripple clone this drawable instead of logging a LayerDrawable ownership warning. */
+    override fun getConstantState(): Drawable.ConstantState = object : Drawable.ConstantState() {
+        override fun newDrawable(): Drawable = SketchCardDrawable(density)
+
+        override fun getChangingConfigurations(): Int = 0
+    }
+
     private companion object {
         const val INSET_DP = 1.2f
-        const val SHADOW = 0x3A2D261C
         const val REVEAL_MS = 460L
         const val REVEAL_DELAY_MS = 0L
     }

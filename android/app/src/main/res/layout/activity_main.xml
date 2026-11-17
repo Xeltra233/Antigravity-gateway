@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- The dashboard shell. Every panel is a shape drawable over the live silk backdrop: a
+     MaterialCardView would composite its translucent cardBackgroundColor onto the theme
+     surface and come out several times brighter than the reference. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
@@ -6,50 +9,1172 @@
     android:layout_height="match_parent"
     android:background="?android:attr/colorBackground">
 
-    <!-- Animated silk backdrop. Only the silk skin makes this visible; every other skin keeps it
-         gone so no GL surface is spun up for a static palette. -->
     <org.antigravity.gateway.ui.SilkRibbonView
         android:id="@+id/silkBackdrop"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:visibility="gone" />
 
-    <LinearLayout
+    <androidx.constraintlayout.widget.ConstraintLayout
+        android:id="@+id/layoutContentRoot"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="vertical">
+        android:layout_height="match_parent">
 
-    <!-- Top bar: title, settings, skin toggle -->
-    <LinearLayout
-        android:id="@+id/layoutTopBar"
-        android:layout_width="match_parent"
-        android:layout_height="56dp"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:paddingStart="16dp"
-        android:paddingEnd="8dp"
-        android:background="?attr/agwTopBar">
-
-        <View
+        <LinearLayout
+            android:id="@+id/layoutShell"
             android:layout_width="0dp"
-            android:layout_height="1dp"
-            android:layout_weight="1" />
+            android:layout_height="0dp"
+            android:orientation="vertical"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintWidth_max="@dimen/content_max_width">
 
-        <org.antigravity.gateway.ui.StyleToggleView
-            android:id="@+id/btnStyle"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:background="?attr/selectableItemBackgroundBorderless" />
+            <!-- .topbar: 54dp, no title text, 36dp icon buttons at 85% opacity -->
+            <LinearLayout
+                android:id="@+id/layoutTopBar"
+                android:layout_width="match_parent"
+                android:layout_height="54dp"
+                android:background="@android:color/transparent"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp">
+
+                <ImageView
+                    android:id="@+id/btnBack"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:alpha="0.85"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/back"
+                    android:padding="8dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/ic_topbar_back"
+                    app:tint="?attr/agwIconTint" />
+
+                <View
+                    android:layout_width="0dp"
+                    android:layout_height="1dp"
+                    android:layout_marginStart="6dp"
+                    android:layout_weight="1" />
+
+                <ImageButton
+                    android:id="@+id/btnNewProvider"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:alpha="0.85"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/provider_new"
+                    android:padding="8dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/ic_topbar_plus"
+                    android:visibility="gone"
+                    app:tint="?attr/agwIconTint" />
+
+                <org.antigravity.gateway.ui.StyleToggleView
+                    android:id="@+id/btnStyle"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:background="?attr/selectableItemBackgroundBorderless" />
+
+                <ImageButton
+                    android:id="@+id/btnSettings"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
+                    android:alpha="0.85"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/settings_entry"
+                    android:padding="8dp"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/ic_topbar_gear"
+                    app:tint="?attr/agwIconTint" />
+            </LinearLayout>
+
+            <FrameLayout
+                android:id="@+id/layoutPages"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1">
+
+                <ScrollView
+                    android:id="@+id/pageGateway"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:clipToPadding="false"
+                    android:scrollbars="none">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp"
+                        android:paddingBottom="20dp">
+
+                    <!-- .status: 24dp dot, 19sp title, 12.5sp caption, 52x27 switch -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:layout_marginBottom="16dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingStart="2dp"
+                        android:paddingTop="4dp"
+                        android:paddingEnd="2dp"
+                        android:paddingBottom="4dp">
+
+                        <View
+                            android:id="@+id/viewStatusDot"
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:background="@drawable/pv_dot" />
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="14dp"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:id="@+id/tvGatewayTitle"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="@string/status_stopped"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textSize="19sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:id="@+id/tvGatewaySub"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="4dp"
+                                android:ellipsize="end"
+                                android:maxLines="1"
+                                android:textColor="?android:attr/textColorSecondary"
+                                android:textSize="12.5sp" />
+                        </LinearLayout>
+
+                        <View
+                            android:id="@+id/viewStatusSwitch"
+                            android:layout_width="52dp"
+                            android:layout_height="27dp"
+                            android:layout_marginStart="14dp"
+                            android:background="@drawable/pv_switch_off" />
+                    </LinearLayout>
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="4dp"
+                        android:layout_marginTop="20dp"
+                        android:layout_marginBottom="10dp"
+                        android:letterSpacing="0.048"
+                        android:text="下游设置"
+                        android:textColor="?android:attr/textColorSecondary"
+                        android:textSize="12.5sp"
+                        android:textStyle="bold" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="14dp"
+                        android:background="@drawable/pv_card"
+                        android:tag="card"
+                        android:orientation="vertical">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:paddingStart="16dp"
+                            android:paddingTop="8dp"
+                            android:paddingEnd="16dp"
+                            android:paddingBottom="8dp">
+                    <LinearLayout
+                        android:id="@+id/rowAddr"
+                        android:layout_width="match_parent"
+                        android:layout_height="60dp"
+                        android:background="?attr/selectableItemBackground"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="监听地址"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textSize="15.5sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:id="@+id/tvRowAddr"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="12dp"
+                            android:ellipsize="end"
+                            android:maxLines="1"
+                            android:maxWidth="180dp"
+                            android:text="127.0.0.1"
+                            android:textColor="?attr/colorOnSurface"
+                            android:textSize="15.5sp"
+                            android:textStyle="bold" />
+
+                        <ImageView
+                            android:layout_width="16dp"
+                            android:layout_height="16dp"
+                            android:layout_marginStart="8dp"
+                            android:alpha="0.9"
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_chevron_right"
+                            app:tint="?attr/agwChevron" />
+                    </LinearLayout>
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:background="?attr/agwDivider" />
+                    <LinearLayout
+                        android:id="@+id/rowPort"
+                        android:layout_width="match_parent"
+                        android:layout_height="60dp"
+                        android:background="?attr/selectableItemBackground"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="监听端口"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textSize="15.5sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:id="@+id/tvRowPort"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="12dp"
+                            android:ellipsize="end"
+                            android:maxLines="1"
+                            android:maxWidth="180dp"
+                            android:text="38472"
+                            android:textColor="?attr/colorOnSurface"
+                            android:textSize="15.5sp"
+                            android:textStyle="bold" />
+
+                        <ImageView
+                            android:layout_width="16dp"
+                            android:layout_height="16dp"
+                            android:layout_marginStart="8dp"
+                            android:alpha="0.9"
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_chevron_right"
+                            app:tint="?attr/agwChevron" />
+                    </LinearLayout>
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:background="?attr/agwDivider" />
+                    <LinearLayout
+                        android:id="@+id/rowKey"
+                        android:layout_width="match_parent"
+                        android:layout_height="60dp"
+                        android:background="?attr/selectableItemBackground"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="下游密钥"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textSize="15.5sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:id="@+id/tvRowKey"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="12dp"
+                            android:ellipsize="end"
+                            android:maxLines="1"
+                            android:maxWidth="180dp"
+                            android:text="••••••••"
+                            android:textColor="?attr/colorOnSurface"
+                            android:textSize="15.5sp"
+                            android:textStyle="bold" />
+
+                        <ImageView
+                            android:layout_width="16dp"
+                            android:layout_height="16dp"
+                            android:layout_marginStart="8dp"
+                            android:alpha="0.9"
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_chevron_right"
+                            app:tint="?attr/agwChevron" />
+                    </LinearLayout>
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:background="?attr/agwDivider" />
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:paddingStart="16dp"
+                            android:paddingTop="11dp"
+                            android:paddingEnd="16dp"
+                            android:paddingBottom="13dp"
+                            android:text="重新生成 Key 需重启网关生效"
+                            android:textColor="?android:attr/textColorHint"
+                            android:textSize="12sp" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+
+                    <TextView
+                        android:id="@+id/btnGenerateKey"
+                        android:layout_width="0dp"
+                        android:layout_height="0dp"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/btnCopyKey"
+                        android:layout_width="0dp"
+                        android:layout_height="0dp"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/tvKeyRestartHint"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="4dp"
+                        android:layout_marginTop="-6dp"
+                        android:layout_marginBottom="6dp"
+                        android:textColor="?android:attr/textColorHint"
+                        android:textSize="11.5sp"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/tvGuardRestartHint"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="4dp"
+                        android:layout_marginBottom="6dp"
+                        android:textColor="?android:attr/textColorHint"
+                        android:textSize="11.5sp"
+                        android:visibility="gone" />
+
+                    <Space
+                        android:layout_width="match_parent"
+                        android:layout_height="14dp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="14dp"
+                        android:background="@drawable/pv_card"
+                        android:tag="card"
+                        android:orientation="vertical">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:paddingStart="16dp"
+                            android:paddingTop="14dp"
+                            android:paddingEnd="16dp"
+                            android:paddingBottom="14dp">
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/client_endpoint_label"
+                            android:textColor="?android:attr/textColorHint"
+                            android:textSize="11.5sp" />
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:id="@+id/tvAppLink"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:ellipsize="end"
+                                android:maxLines="1"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textSize="14sp"
+                                android:textStyle="bold"
+                                tools:text="http://10.0.2.15:38472/v1" />
+
+                            <TextView
+                                android:id="@+id/btnCopyLink"
+                                android:layout_width="wrap_content"
+                                android:layout_height="34dp"
+                                android:layout_marginStart="12dp"
+                                android:background="@drawable/pv_tbtn"
+                        android:tag="ghost"
+                                android:gravity="center"
+                                android:paddingStart="16dp"
+                                android:paddingEnd="16dp"
+                                android:text="@string/copy"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textSize="12.5sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="4dp"
+                        android:layout_marginTop="20dp"
+                        android:layout_marginBottom="10dp"
+                        android:letterSpacing="0.048"
+                        android:text="功能测试"
+                        android:textColor="?android:attr/textColorSecondary"
+                        android:textSize="12.5sp"
+                        android:textStyle="bold" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="14dp"
+                        android:background="@drawable/pv_card"
+                        android:tag="card"
+                        android:orientation="vertical">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:paddingStart="16dp"
+                            android:paddingTop="14dp"
+                            android:paddingEnd="16dp"
+                            android:paddingBottom="14dp">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:id="@+id/btnFetchModels"
+                                android:layout_width="0dp"
+                                android:layout_height="44dp"
+                                android:layout_weight="1"
+                                android:background="@drawable/pv_tbtn"
+                        android:tag="ghost"
+                                android:gravity="center"
+                                android:text="@string/fetch_models"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textSize="13.5sp" />
+
+                            <TextView
+                                android:id="@+id/btnTestMessage"
+                                android:layout_width="0dp"
+                                android:layout_height="44dp"
+                                android:layout_marginStart="10dp"
+                                android:layout_weight="1"
+                                android:background="@drawable/pv_tbtn"
+                        android:tag="ghost"
+                                android:gravity="center"
+                                android:text="@string/test_message"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textSize="13.5sp" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="14dp"
+                            android:text="@string/row_model_id_title"
+                            android:textColor="?android:attr/textColorHint"
+                            android:textSize="11.5sp" />
+
+                        <LinearLayout
+                            android:id="@+id/rowTestModel"
+                            android:layout_width="match_parent"
+                            android:layout_height="44dp"
+                            android:layout_marginTop="6dp"
+                            android:background="@drawable/pv_field"
+                        android:tag="field"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal"
+                            android:paddingStart="12dp"
+                            android:paddingEnd="12dp">
+
+                            <TextView
+                                android:id="@+id/tvRowTestModel"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:ellipsize="end"
+                                android:maxLines="1"
+                                android:text="@string/row_model_id_default"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textSize="14sp" />
+
+                            <ImageView
+                                android:layout_width="14dp"
+                                android:layout_height="14dp"
+                                android:alpha="0.5"
+                                android:src="@drawable/ic_chevron_right" />
+                        </LinearLayout>
+
+                        <ProgressBar
+                            android:id="@+id/pbTesting"
+                            android:layout_width="22dp"
+                            android:layout_height="22dp"
+                            android:layout_gravity="center_horizontal"
+                            android:layout_marginTop="4dp"
+                            android:layout_marginBottom="8dp"
+                            android:indeterminateTint="#7AA2FF"
+                            android:visibility="gone" />
+
+                        <TextView
+                            android:id="@+id/tvTestResult"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:background="@drawable/pv_result"
+                        android:tag="result"
+                            android:fontFamily="monospace"
+                            android:minHeight="64dp"
+                            android:padding="12dp"
+                            android:textColor="?android:attr/textColorSecondary"
+                            android:textSize="12sp"
+                            tools:text="未启动网关" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/btnStartStop"
+                        android:layout_width="match_parent"
+                        android:layout_height="52dp"
+                        android:background="@drawable/pv_primary"
+                        android:tag="primary"
+                        android:gravity="center"
+                        android:text="启动网关"
+                        android:textColor="?attr/colorOnSurface"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tvSafeModeBanner"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:textColor="#C9A227"
+                        android:textSize="12sp"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/btnViewCrashLog"
+                        android:layout_width="match_parent"
+                        android:layout_height="44dp"
+                        android:layout_marginTop="8dp"
+                        android:background="@drawable/pv_tbtn"
+                        android:tag="ghost"
+                        android:gravity="center"
+                        android:textColor="?attr/colorOnSurface"
+                        android:textSize="13sp"
+                        android:visibility="gone" />
+
+                    <!-- Editors kept off screen. MainActivity still owns them; tapping a row above
+                         opens the dialog that writes here and pushes the value into the row. -->
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/tilGatewayPort"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:visibility="gone">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/etGatewayPort"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="number" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/tilDownstreamKey"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:visibility="gone">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/etDownstreamKey"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="text" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/tilTestModelId"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:visibility="gone">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/etTestModelId"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="text" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    </LinearLayout>
+                </ScrollView>
+
+                <ScrollView
+                    android:id="@+id/pageProviders"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:clipToPadding="false"
+                    android:scrollbars="none"
+                    android:visibility="gone">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp"
+                        android:paddingBottom="20dp">
+
+
+
+
+                    <LinearLayout
+                        android:id="@+id/layoutProviderList"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="14dp"
+                        android:orientation="vertical">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:paddingStart="16dp"
+                            android:paddingTop="14dp"
+                            android:paddingEnd="16dp"
+                            android:paddingBottom="14dp">
+
+                        <TextView
+                            android:id="@+id/tvProviderEmpty"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center"
+                            android:paddingTop="18dp"
+                            android:paddingBottom="18dp"
+                            android:text="@string/provider_empty"
+                            android:textColor="?android:attr/textColorHint"
+                            android:textSize="12.5sp" />
+                        </LinearLayout>
+
+                        <androidx.recyclerview.widget.RecyclerView
+                            android:id="@+id/recyclerProviders"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:clipToPadding="false"
+                            android:nestedScrollingEnabled="false"
+                            android:overScrollMode="never"
+                            android:paddingTop="4dp"
+                            android:paddingBottom="4dp" />
+                    </LinearLayout>
+
+                    <!-- Editors for the provider page. Same contract as the gateway page. -->
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/tilUpstreamUrl"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:visibility="gone">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/etUpstreamUrl"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="textUri" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    <com.google.android.material.textfield.TextInputLayout
+                        android:id="@+id/tilUpstreamKey"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:visibility="gone">
+
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/etUpstreamKey"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:inputType="text" />
+                    </com.google.android.material.textfield.TextInputLayout>
+
+                    </LinearLayout>
+                </ScrollView>
+
+                <ScrollView
+                    android:id="@+id/pageRouting"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:clipToPadding="false"
+                    android:scrollbars="none"
+                    android:visibility="gone">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:paddingStart="16dp"
+                        android:paddingEnd="16dp"
+                        android:paddingBottom="20dp">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="4dp"
+                        android:layout_marginTop="20dp"
+                        android:layout_marginBottom="10dp"
+                        android:letterSpacing="0.048"
+                        android:text="路由与还原"
+                        android:textColor="?android:attr/textColorSecondary"
+                        android:textSize="12.5sp"
+                        android:textStyle="bold" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="14dp"
+                        android:background="@drawable/pv_card"
+                        android:tag="card"
+                        android:orientation="vertical">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:paddingStart="16dp"
+                            android:paddingTop="8dp"
+                            android:paddingEnd="16dp"
+                            android:paddingBottom="8dp">
+                    <LinearLayout
+                        android:id="@+id/rowGuardLevel"
+                        android:layout_width="match_parent"
+                        android:layout_height="60dp"
+                        android:background="?attr/selectableItemBackground"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="防路由等级"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textSize="15.5sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:id="@+id/tvRowGuardLevel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="12dp"
+                            android:ellipsize="end"
+                            android:maxLines="1"
+                            android:maxWidth="180dp"
+                            android:text="—"
+                            android:textColor="?attr/colorOnSurface"
+                            android:textSize="15.5sp"
+                            android:textStyle="bold" />
+
+                        <ImageView
+                            android:layout_width="16dp"
+                            android:layout_height="16dp"
+                            android:layout_marginStart="8dp"
+                            android:alpha="0.9"
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_chevron_right"
+                            app:tint="?attr/agwChevron" />
+                    </LinearLayout>
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:background="?attr/agwDivider" />
+                    <LinearLayout
+                        android:id="@+id/rowReport"
+                        android:layout_width="match_parent"
+                        android:layout_height="60dp"
+                        android:background="?attr/selectableItemBackground"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="模型上报"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textSize="15.5sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:id="@+id/tvRowReport"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="12dp"
+                            android:ellipsize="end"
+                            android:maxLines="1"
+                            android:maxWidth="180dp"
+                            android:text="—"
+                            android:textColor="?attr/colorOnSurface"
+                            android:textSize="15.5sp"
+                            android:textStyle="bold" />
+
+                        <ImageView
+                            android:layout_width="16dp"
+                            android:layout_height="16dp"
+                            android:layout_marginStart="8dp"
+                            android:alpha="0.9"
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_chevron_right"
+                            app:tint="?attr/agwChevron" />
+                    </LinearLayout>
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <TextView
+                        android:id="@+id/tvGuardSummary"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:id="@+id/btnOpenGuard"
+                        android:layout_width="0dp"
+                        android:layout_height="0dp"
+                        android:visibility="gone" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="4dp"
+                        android:layout_marginTop="20dp"
+                        android:layout_marginBottom="10dp"
+                        android:letterSpacing="0.048"
+                        android:text="诊断"
+                        android:textColor="?android:attr/textColorSecondary"
+                        android:textSize="12.5sp"
+                        android:textStyle="bold" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="14dp"
+                        android:background="@drawable/pv_card"
+                        android:tag="card"
+                        android:orientation="vertical">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:paddingStart="16dp"
+                            android:paddingTop="8dp"
+                            android:paddingEnd="16dp"
+                            android:paddingBottom="8dp">
+                    <LinearLayout
+                        android:id="@+id/rowRunLog"
+                        android:layout_width="match_parent"
+                        android:layout_height="60dp"
+                        android:background="?attr/selectableItemBackground"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="运行日志"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textSize="15.5sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:id="@+id/tvRowRunLog"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="12dp"
+                            android:ellipsize="end"
+                            android:maxLines="1"
+                            android:maxWidth="180dp"
+                            android:text="查看"
+                            android:textColor="?attr/colorOnSurface"
+                            android:textSize="15.5sp"
+                            android:textStyle="bold" />
+
+                        <ImageView
+                            android:layout_width="16dp"
+                            android:layout_height="16dp"
+                            android:layout_marginStart="8dp"
+                            android:alpha="0.9"
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_chevron_right"
+                            app:tint="?attr/agwChevron" />
+                    </LinearLayout>
+
+                    <View
+                        android:layout_width="match_parent"
+                        android:layout_height="1dp"
+                        android:background="?attr/agwDivider" />
+                    <LinearLayout
+                        android:id="@+id/rowCrashLog"
+                        android:layout_width="match_parent"
+                        android:layout_height="60dp"
+                        android:background="?attr/selectableItemBackground"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:text="崩溃日志"
+                                android:textColor="?attr/colorOnSurface"
+                                android:textSize="15.5sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+
+                        <TextView
+                            android:id="@+id/tvRowCrashLog"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="12dp"
+                            android:ellipsize="end"
+                            android:maxLines="1"
+                            android:maxWidth="180dp"
+                            android:text="查看"
+                            android:textColor="?attr/colorOnSurface"
+                            android:textSize="15.5sp"
+                            android:textStyle="bold" />
+
+                        <ImageView
+                            android:layout_width="16dp"
+                            android:layout_height="16dp"
+                            android:layout_marginStart="8dp"
+                            android:alpha="0.9"
+                            android:contentDescription="@null"
+                            android:src="@drawable/ic_chevron_right"
+                            app:tint="?attr/agwChevron" />
+                    </LinearLayout>
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    </LinearLayout>
+                </ScrollView>
+
+            </FrameLayout>
+
+            <!-- bottom tabs: 62dp glass plate, three equal cells, icon over label -->
+            <LinearLayout
+                android:id="@+id/layoutTabs"
+                android:layout_width="match_parent"
+                android:layout_height="62dp"
+                android:background="@drawable/pv_tabs"
+                        android:tag="tabs"
+                android:orientation="horizontal">
+
+                <LinearLayout
+                    android:id="@+id/tabGateway"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:background="?attr/selectableItemBackground"
+                    android:gravity="center"
+                    android:orientation="vertical">
+
+                    <ImageView
+                        android:id="@+id/icTabGateway"
+                        android:layout_width="22dp"
+                        android:layout_height="22dp"
+                        android:contentDescription="@null"
+                        android:src="@drawable/ic_tab_gateway"
+                        app:tint="?attr/agwChevron" />
+
+                    <TextView
+                        android:id="@+id/tvTabGateway"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="网关"
+                        android:textColor="?android:attr/textColorSecondary"
+                        android:textSize="11.5sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/tabProvider"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:background="?attr/selectableItemBackground"
+                    android:gravity="center"
+                    android:orientation="vertical">
+
+                    <ImageView
+                        android:id="@+id/icTabProvider"
+                        android:layout_width="22dp"
+                        android:layout_height="22dp"
+                        android:contentDescription="@null"
+                        android:src="@drawable/ic_tab_provider"
+                        app:tint="?attr/agwChevron" />
+
+                    <TextView
+                        android:id="@+id/tvTabProvider"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="供应商"
+                        android:textColor="?android:attr/textColorSecondary"
+                        android:textSize="11.5sp" />
+                </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/tabRoute"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:background="?attr/selectableItemBackground"
+                    android:gravity="center"
+                    android:orientation="vertical">
+
+                    <ImageView
+                        android:id="@+id/icTabRoute"
+                        android:layout_width="22dp"
+                        android:layout_height="22dp"
+                        android:contentDescription="@null"
+                        android:src="@drawable/ic_tab_route"
+                        app:tint="?attr/agwChevron" />
+
+                    <TextView
+                        android:id="@+id/tvTabRoute"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="路由"
+                        android:textColor="?android:attr/textColorSecondary"
+                        android:textSize="11.5sp" />
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+    </androidx.constraintlayout.widget.ConstraintLayout>
+
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/sheetProviderDetail"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/transparent"
+    android:clickable="true"
+    android:focusable="true"
+    android:orientation="vertical"
+    android:visibility="gone">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="64dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="8dp"
+        android:paddingEnd="16dp">
 
         <ImageButton
-            android:id="@+id/btnSettings"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+            android:id="@+id/btnProviderDetailBack"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/settings_entry"
-            android:scaleType="centerInside"
-            android:src="@drawable/ic_settings"
-            app:tint="?attr/colorOnSurface" />
+            android:contentDescription="@string/provider_detail_title"
+            android:src="@drawable/ic_topbar_back" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:text="@string/provider_detail_title"
+            android:textColor="?attr/colorOnSurface"
+            android:textSize="17sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/btnProviderDetailDelete"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="?attr/selectableItemBackground"
+            android:paddingStart="12dp"
+            android:paddingTop="8dp"
+            android:paddingEnd="12dp"
+            android:paddingBottom="8dp"
+            android:text="@string/provider_action_delete"
+            android:textColor="?attr/colorAccent"
+            android:textSize="14sp" />
     </LinearLayout>
 
     <ScrollView
@@ -57,424 +1182,124 @@
         android:layout_height="0dp"
         android:layout_weight="1"
         android:fillViewport="true"
-        android:background="?android:attr/colorBackground">
+        android:scrollbars="none">
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="16dp">
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="24dp">
 
-            <!-- Header / Provider Row -->
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="match_parent"
+            <TextView
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                app:cardCornerRadius="12dp"
-                app:cardElevation="2dp"
-                app:cardBackgroundColor="?attr/colorSurface">
+                android:layout_marginTop="8dp"
+                android:text="@string/provider_field_name"
+                android:textColor="?android:attr/textColorSecondary"
+                android:textSize="12.5sp" />
 
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:padding="12dp">
-
-                    <LinearLayout
-                        android:id="@+id/layoutProviderSelect"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical"
-                        android:clickable="true"
-                        android:focusable="true"
-                        android:background="?attr/selectableItemBackground">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/provider_label"
-                            android:textSize="12sp"
-                            android:textColor="?android:attr/textColorSecondary" />
-
-                        <LinearLayout
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:orientation="horizontal"
-                            android:gravity="center_vertical">
-
-                            <TextView
-                                android:id="@+id/tvCurrentProvider"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="默认供应商"
-                                android:textSize="16sp"
-                                android:textStyle="bold"
-                                android:textColor="?attr/colorOnSurface" />
-
-                            <ImageButton
-                                android:id="@+id/btnRenameCurrentProvider"
-                                android:layout_width="28dp"
-                                android:layout_height="28dp"
-                                android:layout_marginStart="6dp"
-                                android:background="?attr/selectableItemBackgroundBorderless"
-                                android:src="@android:drawable/ic_menu_edit"
-                                android:contentDescription="重命名当前供应商" />
-                        </LinearLayout>
-                    </LinearLayout>
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnSwitchProvider"
-                        style="@style/Widget.MaterialComponents.Button.TextButton"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:textColor="?attr/agwLink"
-                        android:text="切换/新建" />
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
-            <!-- Config Card: Upstream & Downstream -->
-            <com.google.android.material.card.MaterialCardView
+            <EditText
+                android:id="@+id/etProviderDetailName"
                 android:layout_width="match_parent"
+                android:tag="field"
+                android:layout_height="52dp"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/pv_field"
+                android:hint="@string/provider_field_name"
+                android:imeOptions="actionNext"
+                android:inputType="text"
+                android:maxLines="1"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:textColor="?attr/colorOnSurface"
+                android:textColorHint="?android:attr/textColorHint"
+                android:textSize="15sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                app:cardCornerRadius="12dp"
-                app:cardElevation="2dp"
-                app:cardBackgroundColor="?attr/colorSurface">
+                android:layout_marginTop="18dp"
+                android:text="@string/row_upstream_url_title"
+                android:textColor="?android:attr/textColorSecondary"
+                android:textSize="12.5sp" />
 
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
-
-                    <!-- Row 1: Upstream URL -->
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:id="@+id/tilUpstreamUrl"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="12dp"
-                        android:hint="@string/upstream_url_label"
-                        app:hintTextColor="?android:attr/textColorSecondary"
-                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/etUpstreamUrl"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:inputType="textUri"
-                            android:textColor="?attr/colorOnSurface"
-                            android:textColorHint="?android:attr/textColorSecondary"
-                            android:singleLine="true" />
-                    </com.google.android.material.textfield.TextInputLayout>
-
-                    <!-- Row 2: Upstream Key -->
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:id="@+id/tilUpstreamKey"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="12dp"
-                        android:hint="@string/upstream_key_label"
-                        app:hintTextColor="?android:attr/textColorSecondary"
-                        app:passwordToggleEnabled="true"
-                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/etUpstreamKey"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:inputType="textPassword"
-                            android:textColor="?attr/colorOnSurface"
-                            android:textColorHint="?android:attr/textColorSecondary"
-                            android:singleLine="true" />
-                    </com.google.android.material.textfield.TextInputLayout>
-
-                    <!-- Row 3: Downstream Key -->
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/downstream_key_label"
-                        android:textSize="12sp"
-                        android:textColor="?android:attr/textColorSecondary"
-                        android:layout_marginBottom="4dp" />
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:gravity="center_vertical"
-                        android:layout_marginBottom="4dp">
-
-                        <com.google.android.material.textfield.TextInputLayout
-                            android:id="@+id/tilDownstreamKey"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            app:hintTextColor="?android:attr/textColorSecondary"
-                            app:passwordToggleEnabled="true"
-                            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense">
-                            <com.google.android.material.textfield.TextInputEditText
-                                android:id="@+id/etDownstreamKey"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:inputType="textPassword"
-                                android:textColor="?attr/colorOnSurface"
-                                android:textColorHint="?android:attr/textColorSecondary"
-                                android:focusable="false"
-                                android:clickable="true"
-                                android:cursorVisible="false"
-                                android:singleLine="true" />
-                        </com.google.android.material.textfield.TextInputLayout>
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/btnGenerateKey"
-                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="8dp"
-                            android:textColor="?attr/agwLink"
-                            android:text="@string/generate_key" />
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/btnCopyKey"
-                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="4dp"
-                            android:textColor="?attr/agwLink"
-                            android:text="@string/copy_key" />
-                    </LinearLayout>
-
-                    <TextView
-                        android:id="@+id/tvKeyRestartHint"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="* 重新生成 Key 需重启网关生效"
-                        android:textSize="11sp"
-                        android:textColor="?android:attr/textColorSecondary"
-                        android:visibility="gone" />
-
-                    <TextView
-                        android:id="@+id/tvGuardRestartHint"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/settings_restart_to_apply"
-                        android:textSize="11sp"
-                        android:textColor="?android:attr/textColorSecondary"
-                        android:visibility="gone" />
-
-                    <!-- Row 4: Port Input -->
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:id="@+id/tilGatewayPort"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:hint="@string/gateway_port_label"
-                        app:hintTextColor="?android:attr/textColorSecondary"
-                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/etGatewayPort"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:inputType="number"
-                            android:textColor="?attr/colorOnSurface"
-                            android:textColorHint="?android:attr/textColorSecondary"
-                            android:singleLine="true" />
-                    </com.google.android.material.textfield.TextInputLayout>
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
-            <!-- App Link Card -->
-            <com.google.android.material.card.MaterialCardView
+            <EditText
+                android:id="@+id/etProviderDetailUrl"
                 android:layout_width="match_parent"
+                android:tag="field"
+                android:layout_height="52dp"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/pv_field"
+                android:hint="@string/row_upstream_url_title"
+                android:imeOptions="actionNext"
+                android:inputType="textUri"
+                android:maxLines="1"
+                android:paddingStart="14dp"
+                android:paddingEnd="14dp"
+                android:textColor="?attr/colorOnSurface"
+                android:textColorHint="?android:attr/textColorHint"
+                android:textSize="15sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginBottom="12dp"
-                app:cardCornerRadius="12dp"
-                app:cardElevation="2dp"
-                app:cardBackgroundColor="?attr/colorSurface">
+                android:layout_marginTop="18dp"
+                android:text="@string/row_upstream_key_title"
+                android:textColor="?android:attr/textColorSecondary"
+                android:textSize="12.5sp" />
 
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="horizontal"
-                    android:gravity="center_vertical"
-                    android:padding="14dp">
-
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:orientation="vertical">
-
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="@string/app_link_label"
-                            android:textSize="12sp"
-                            android:textColor="?android:attr/textColorSecondary" />
-
-                        <TextView
-                            android:id="@+id/tvAppLink"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="http://127.0.0.1:38472/v1"
-                            android:textSize="14sp"
-                            android:textStyle="bold"
-                            android:textColor="?attr/agwLink"
-                            android:textIsSelectable="true" />
-                    </LinearLayout>
-
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnCopyLink"
-                        style="@style/Widget.MaterialComponents.Button.TextButton"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:textColor="?attr/agwLink"
-                        android:text="@string/copy_key" />
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
-            <!-- Start / Stop Button -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnStartStop"
+            <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="52dp"
-                android:layout_marginBottom="16dp"
-                android:text="@string/start_gateway"
-                android:textColor="?attr/colorOnPrimary"
-                android:textSize="16sp"
-                app:cornerRadius="12dp"
-                app:backgroundTint="?attr/colorPrimary" />
+                android:layout_marginTop="6dp">
 
-            <!-- Status & Test Card -->
-            <com.google.android.material.card.MaterialCardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginBottom="16dp"
-                app:cardCornerRadius="12dp"
-                app:cardElevation="2dp"
-                app:cardBackgroundColor="?attr/colorSurface">
-
-                <LinearLayout
+                <EditText
+                    android:id="@+id/etProviderDetailKey"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="16dp">
+                    android:layout_height="52dp"
+                    android:tag="field"
+                    android:background="@drawable/pv_field"
+                    android:hint="@string/row_upstream_key_title"
+                    android:imeOptions="actionDone"
+                    android:inputType="textVisiblePassword"
+                    android:maxLines="1"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="48dp"
+                    android:textColor="?attr/colorOnSurface"
+                    android:textColorHint="?android:attr/textColorHint"
+                    android:textSize="15sp" />
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="功能测试与状态"
-                        android:textSize="14sp"
-                        android:textStyle="bold"
-                        android:textColor="?attr/colorOnSurface"
-                        android:layout_marginBottom="10dp" />
+                <ImageButton
+                    android:id="@+id/btnProviderDetailKeyToggle"
+                    android:layout_width="44dp"
+                    android:layout_height="44dp"
+                    android:layout_gravity="end|center_vertical"
+                    android:layout_marginEnd="4dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:contentDescription="@string/key_show"
+                    android:scaleType="centerInside"
+                    android:src="@drawable/ic_eye"
+                    app:tint="?attr/agwIconTint" />
+            </FrameLayout>
 
-                    <!-- Test Action Buttons -->
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:layout_marginBottom="8dp">
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/btnFetchModels"
-                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:enabled="false"
-                            android:textColor="?attr/agwLink"
-                            android:text="@string/fetch_models" />
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/btnTestMessage"
-                            style="@style/Widget.MaterialComponents.Button.OutlinedButton"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="8dp"
-                            android:layout_weight="1"
-                            android:enabled="false"
-                            android:textColor="?attr/agwLink"
-                            android:text="@string/test_message" />
-                    </LinearLayout>
-
-                    <!-- Optional Model ID input for testing -->
-                    <com.google.android.material.textfield.TextInputLayout
-                        android:id="@+id/tilTestModelId"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginBottom="8dp"
-                        android:hint="@string/custom_model_id_hint"
-                        app:hintTextColor="?android:attr/textColorSecondary"
-                        style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox.Dense">
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/etTestModelId"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:textColor="?attr/colorOnSurface"
-                            android:textColorHint="?android:attr/textColorSecondary"
-                            android:singleLine="true" />
-                    </com.google.android.material.textfield.TextInputLayout>
-
-                    <!-- Progress indicator for async tests -->
-                    <ProgressBar
-                        android:id="@+id/pbTesting"
-                        style="?android:attr/progressBarStyleHorizontal"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:indeterminate="true"
-                        android:visibility="gone"
-                        android:layout_marginBottom="6dp" />
-
-                    <!-- Results display box -->
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/test_result_title"
-                        android:textSize="12sp"
-                        android:textColor="?android:attr/textColorSecondary"
-                        android:layout_marginBottom="4dp" />
-
-                    <TextView
-                        android:id="@+id/tvTestResult"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:minLines="3"
-                        android:maxLines="10"
-                        android:background="?attr/agwLogBg"
-                        android:padding="10dp"
-                        android:text="未启动网关"
-                        android:fontFamily="monospace"
-                        android:textSize="12sp"
-                        android:textColor="?attr/colorOnSurface"
-                        android:scrollbars="vertical" />
-                    <TextView
-                        android:id="@+id/tvSafeModeBanner"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:background="?attr/agwLogBg"
-                        android:padding="10dp"
-                        android:textColor="?attr/agwLink"
-                        android:textSize="12sp"
-                        android:visibility="gone"
-                        tools:text="安全模式：检测到连续 3 次启动未成功" />
-
-                    <!-- Shown only after a crash so users can copy the stack trace back to us -->
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnViewCrashLog"
-                        style="@style/Widget.MaterialComponents.Button.TextButton"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_gravity="end"
-                        android:layout_marginTop="4dp"
-                        android:textColor="?attr/agwLink"
-                        android:visibility="gone"
-                        tools:text="查看崩溃日志 (1)" />
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
+            <TextView
+                android:id="@+id/btnProviderDetailSave"
+                android:layout_width="match_parent"
+                android:layout_height="52dp"
+                android:layout_marginTop="28dp"
+                android:background="@drawable/pv_primary"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:tag="primary"
+                android:text="@string/provider_detail_save"
+                android:textColor="?attr/colorOnSurface"
+                android:textSize="15sp"
+                android:textStyle="bold" />
         </LinearLayout>
     </ScrollView>
-    </LinearLayout>
+</LinearLayout>
+
 </FrameLayout>

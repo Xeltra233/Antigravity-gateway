@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- .sw: 52x27 accent track with a 21px thumb inset 3px. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#7AA2FF" />
+            <corners android:radius="14dp" />
+        </shape>
+    </item>
+    <item
+        android:bottom="3dp"
+        android:left="28dp"
+        android:right="3dp"
+        android:top="3dp">
+        <shape android:shape="oval">
+            <solid android:color="#FFFFFF" />
+        </shape>
+    </item>
+</layer-list>

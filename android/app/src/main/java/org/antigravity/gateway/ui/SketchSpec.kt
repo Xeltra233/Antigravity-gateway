@@ -70,6 +70,17 @@ object SketchSpec {
     /** Paper showing through the crayon. */
     const val PENCIL_VOID = 0xFFF6EFE2.toInt()
 
+    /**
+     * Primary button. `docs/sketch-preview.html` paints it as a light blue slab (`#9cbce7`) hatched
+     * with white, not as a pigmented crayon block: that is what keeps the ink label readable.
+     */
+    const val BUTTON_FILL = 0xFFA3C3E9.toInt()
+    val BUTTON_HATCH = intArrayOf(
+        0x47FFFFFF,
+        0x3AFFFFFF,
+        0x2EFFFFFF
+    )
+
     /** Heavy crayon pressure. */
     const val PENCIL_PRESS = 0x3A609E
 

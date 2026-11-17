@@ -138,10 +138,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         viewModelScope.launch(Dispatchers.IO) {
             val updated = repository.selectProvider(providerId)
-            _uiState.value = _uiState.value.copy(
-                config = updated,
-                statusMessage = statusOrPersistenceWarning("已切换至: ${updated.getCurrentProvider()?.name}")
-            )
+            // Switching is silent on purpose: the selected pill is the only feedback the page gives.
+            _uiState.value = _uiState.value.copy(config = updated)
         }
     }
 
@@ -164,12 +162,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    /** Detail page save: upstream URL and key for one provider, name handled by renameProvider. */
+    fun updateProviderUpstream(providerId: String, upstreamUrl: String, upstreamKey: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val updated = repository.updateProviderUpstream(providerId, upstreamUrl, upstreamKey)
+            _uiState.value = _uiState.value.copy(
+                config = updated,
+                statusMessage = statusOrPersistenceWarning("已保存供应商配置")
+            )
+        }
+    }
+
     fun deleteProvider(providerId: String) {
         viewModelScope.launch(Dispatchers.IO) {
             val updated = repository.deleteProvider(providerId)
             _uiState.value = _uiState.value.copy(config = updated, statusMessage = statusOrPersistenceWarning("已删除供应商"))
         }
     }
+    /** Drag finished: persist the new order in one write. */
+    fun reorderProviders(orderedIds: List<String>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val updated = repository.reorderProviders(orderedIds)
+            _uiState.value = _uiState.value.copy(config = updated)
+        }
+    }
+
 
     fun regenerateDownstreamKey() {
         viewModelScope.launch(Dispatchers.IO) {
@@ -208,11 +225,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val port = _uiState.value.config.port
 
         if (url.isEmpty()) {
-            _uiState.value = _uiState.value.copy(statusMessage = "请输入上游 URL")
+            _uiState.value = _uiState.value.copy(statusMessage = "请输入 Base URL")
             return
         }
         if (key.isEmpty()) {
-            _uiState.value = _uiState.value.copy(statusMessage = "请输入上游 Key")
+            _uiState.value = _uiState.value.copy(statusMessage = "请输入 API 密钥")
             return
         }
 
@@ -251,7 +268,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
-        _uiState.value = _uiState.value.copy(isTesting = true, testResult = "正在拉取上游模型列表...")
+        _uiState.value = _uiState.value.copy(isTesting = true, testResult = "正在拉取模型列表...")
         viewModelScope.launch {
             val result = GatewayTestClient.fetchModels(
                 downstreamKey = _uiState.value.config.downstreamKey,
@@ -260,7 +277,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (result.isSuccess) {
                 val models = result.getOrNull() ?: emptyList()
                 val text = if (models.isEmpty()) {
-                    "成功连接，但上游未返回任何模型 ID"
+                    "连接成功，但未返回任何模型 ID"
                 } else {
                     "✅ 成功获取 ${models.size} 个模型:\n" + models.take(30).joinToString("\n") { "• $it" } +
                             if (models.size > 30) "\n... (以及其余 ${models.size - 30} 个)" else ""

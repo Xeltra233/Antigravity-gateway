@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- .dot::before: a 10px core inside a 24px 16% halo, matching the HTML scale(.42) dot. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="#297AA2FF" />
+        </shape>
+    </item>
+    <item
+        android:bottom="7dp"
+        android:left="7dp"
+        android:right="7dp"
+        android:top="7dp">
+        <shape android:shape="oval">
+            <solid android:color="#7AA2FF" />
+        </shape>
+    </item>
+</layer-list>

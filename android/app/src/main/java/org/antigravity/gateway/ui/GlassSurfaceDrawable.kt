@@ -36,13 +36,6 @@ class GlassSurfaceDrawable(
         strokeWidth = density
     }
     private val hairline = Paint(Paint.ANTI_ALIAS_FLAG).apply { strokeWidth = density }
-    // Stroked, not filled: the blur only has to survive outside the panel, and a filled shape would
-    // show through the translucent glass wash.
-    private val shadow = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = SOLID
-        style = Paint.Style.STROKE
-        strokeWidth = density
-    }
     private var alphaScale = 255
 
     override fun onBoundsChange(bounds: android.graphics.Rect) {
@@ -62,26 +55,18 @@ class GlassSurfaceDrawable(
             GLOSS, 0x00FFFFFF, Shader.TileMode.CLAMP
         )
         border.color = edgeColor()
-        shadow.setShadowLayer(
-            SHADOW_RADIUS_DP * density, 0f, SHADOW_DY_DP * density,
-            if (variant == Variant.PRIMARY) SHADOW_BLUE else SHADOW
-        )
 
     }
 
     override fun draw(canvas: Canvas) {
         val radius = radiusDp * density
 
-        if (variant == Variant.CARD || variant == Variant.MENU || variant == Variant.PRIMARY) {
-            canvas.drawRoundRect(rect, radius, radius, shadow)
-        }
         if (ColorTint.isVisible(body.color)) {
             canvas.drawRoundRect(rect, radius, radius, body)
         }
         canvas.drawRoundRect(rect, radius, radius, glass)
-        if (variant == Variant.CARD) {
-            canvas.drawRoundRect(rect, radius, radius, gloss)
-        }
+        // No top gloss on the card: the HTML panel has none, and a 13% white gradient at the top
+        // was what made every card look bleached against the dark ribbon.
         canvas.drawPath(path, border)
         drawInsets(canvas, radius)
     }
@@ -115,11 +100,15 @@ class GlassSurfaceDrawable(
      * shaded stretches of the ribbon.
      */
     private fun bodyTint(): Int = when (variant) {
-        Variant.CARD -> 0xB22E4488.toInt()
-        Variant.TABS -> 0x9E161E34.toInt()
-        Variant.FIELD -> 0xAA4E7ECC.toInt()
-        Variant.PRIMARY -> 0xD196B4FF.toInt()
-        Variant.MENU -> 0xE61A243E.toInt()
+        // Alphas follow the HTML preview (docs/app-preview.html, body[data-t="acr"]):
+        // card .11, field .05, primary .20, tabs .62, menu .96. The card and the primary keep a
+        // few extra percent because Android has no backdrop blur below API 31, so without it a
+        // literal .11 reads as empty space instead of glass.
+        Variant.CARD -> 0x1C96AFE1
+        Variant.TABS -> 0x9E090E1A.toInt()
+        Variant.FIELD -> 0x0FFFFFFF
+        Variant.PRIMARY -> 0x3D96AFE1
+        Variant.MENU -> 0xF5121A2C.toInt()
     }
 
     private fun washColors(): IntArray = when (variant) {
@@ -184,6 +173,18 @@ class GlassSurfaceDrawable(
     @Deprecated("Deprecated in Drawable, still required by the platform signature.")
     override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
 
+    /**
+     * A ripple needs to clone its content drawable when the view re-applies a background tint.
+     * Without a constant state the platform cannot clone this instance and logs
+     * "Invalid drawable added to LayerDrawable" on every restyle.
+     */
+    override fun getConstantState(): Drawable.ConstantState = object : Drawable.ConstantState() {
+        override fun newDrawable(): Drawable =
+            GlassSurfaceDrawable(density, radiusDp, variant).also { it.alpha = alphaScale }
+
+        override fun getChangingConfigurations(): Int = 0
+    }
+
     private object ColorTint {
         fun isVisible(color: Int): Boolean = (color ushr 24) and 0xFF != 0
     }
@@ -192,12 +193,6 @@ class GlassSurfaceDrawable(
         const val GLOSS_SPAN = 0.36f
         const val GLOSS = 0x22FFFFFF
 
-        const val SHADOW_RADIUS_DP = 18f
-        const val SHADOW_DY_DP = 7f
-        const val SHADOW = 0x7F000000
-        const val SHADOW_BLUE = 0x4D3264EB
 
-        /** Opaque stand-in for the panel body: only its shadow survives under the real fill. */
-        const val SOLID = 0xFF0A1220.toInt()
     }
 }

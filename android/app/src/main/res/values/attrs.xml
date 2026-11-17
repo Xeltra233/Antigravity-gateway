@@ -10,4 +10,12 @@
     <attr name="agwFieldStroke" format="color" />
     <attr name="agwFieldStrokeWidth" format="dimension" />
     <attr name="agwFieldStrokeWidthFocused" format="dimension" />
+    <!-- Hairline between rows: white 10% on the silk, a warm rule on paper. -->
+    <attr name="agwDivider" format="color" />
+    <!-- Top bar icons and the row chevrons: fixed white/grey tints vanish on the light skins. -->
+    <attr name="agwIconTint" format="color" />
+    <attr name="agwChevron" format="color" />
+    <!-- Switch track: neutral when off so it blends into the page, accent when on. -->
+    <attr name="agwSwitchOn" format="color" />
+    <attr name="agwSwitchOff" format="color" />
 </resources>

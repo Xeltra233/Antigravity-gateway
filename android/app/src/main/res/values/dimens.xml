@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The shell fills the window on every phone bucket (360/411/720dp all clamp to the screen
+         width), and only a genuinely wide canvas keeps a reading width: 720dp, centred. -->
+    <dimen name="content_max_width">720dp</dimen>
+</resources>

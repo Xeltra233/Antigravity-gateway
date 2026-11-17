@@ -1,0 +1,1033 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Static 1:1 transcription of docs/app-preview.html in the "acr" (silk) theme.
+     Every dimension and colour below is copied from the HTML custom properties rather than invented:
+     .phone is 420x932, so 1 CSS px maps to 1dp. Data is hard-coded on purpose — this exists to be
+     compared against the browser before any logic is attached. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <org.antigravity.gateway.ui.SilkRibbonView
+        android:id="@+id/pvBackdrop"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- The shell takes the whole screen until content_max_width is reached, so a 411dp phone
+         gets full-bleed content and a tablet stops at 620/720dp instead of a fixed 420dp strip. -->
+    <LinearLayout
+        android:id="@+id/pvShell"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_gravity="center_horizontal"
+        android:orientation="vertical">
+
+        <!-- .topbar{display:flex;align-items:center;gap:6px;height:54px;padding:0 14px;flex:none}
+             children: back 36x36, .title flex:1 (pageTitle is never assigned, so it stays empty),
+             .dots 36x36, settings 36x36. .ico-btn uses the ink colour at opacity .85. -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="54dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="14dp"
+            android:paddingEnd="14dp">
+
+            <ImageView
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:alpha="0.85"
+                android:contentDescription="@null"
+                android:scaleType="center"
+                android:src="@drawable/ic_topbar_back"
+                app:tint="#EEF2FA" />
+
+            <View
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1" />
+
+            <ImageView
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:alpha="0.85"
+                android:contentDescription="@null"
+                android:scaleType="center"
+                android:src="@drawable/ic_topbar_dots"
+                app:tint="#EEF2FA" />
+
+            <ImageView
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_marginStart="6dp"
+                android:alpha="0.85"
+                android:contentDescription="@null"
+                android:scaleType="center"
+                android:src="@drawable/ic_topbar_gear"
+                app:tint="#EEF2FA" />
+        </LinearLayout>
+
+        <!-- .body: padding 2px 16px 16px, scrolls behind the tab bar -->
+        <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:clipToPadding="false"
+            android:fillViewport="true"
+            android:overScrollMode="never"
+            android:paddingStart="16dp"
+            android:paddingTop="2dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="16dp"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <!-- ================= page 0: gateway ================= -->
+                <LinearLayout
+                    android:id="@+id/pvPage0"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <!-- .status: dot 24, title 19/700, caption 12.5, switch 52x27 -->
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="6dp"
+                        android:layout_marginBottom="16dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingStart="2dp"
+                        android:paddingTop="4dp"
+                        android:paddingEnd="2dp"
+                        android:paddingBottom="4dp">
+
+                        <View
+                            android:layout_width="24dp"
+                            android:layout_height="24dp"
+                            android:background="@drawable/pv_dot" />
+
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="14dp"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:letterSpacing="0.008"
+                                android:text="运行中"
+                                android:textColor="#EEF2FA"
+                                android:textSize="19sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="4dp"
+                                android:ellipsize="end"
+                                android:maxLines="1"
+                                android:text="服务已启动，监听 127.0.0.1:38472"
+                                android:textColor="#A6B2C9"
+                                android:textSize="12.5sp" />
+                        </LinearLayout>
+
+                        <View
+                            android:layout_width="52dp"
+                            android:layout_height="27dp"
+                            android:layout_marginStart="14dp"
+                            android:background="@drawable/pv_switch" />
+                    </LinearLayout>
+
+                    <!-- .sec -->
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="4dp"
+                        android:layout_marginTop="20dp"
+                        android:layout_marginBottom="10dp"
+                        android:letterSpacing="0.048"
+                        android:text="下游设置"
+                        android:textColor="#A6B2C9"
+                        android:textSize="12.5sp"
+                        android:textStyle="bold" />
+
+                    <!-- .card.list: 11% fill, 13% border, 18px radius, 16px padding -->
+                    <LinearLayout
+                        android:orientation="vertical"
+                        android:background="@drawable/pv_card"
+                        android:elevation="14dp"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="14dp">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:paddingStart="16dp"
+                            android:paddingTop="8dp"
+                            android:paddingEnd="16dp"
+                            android:paddingBottom="8dp">
+
+                            <!-- .row: 60px tall, 15.5/600 label and value, 16px chevron -->
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="60dp"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="监听地址"
+                                    android:textColor="#EEF2FA"
+                                    android:textSize="15.5sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="12dp"
+                                    android:text="127.0.0.1"
+                                    android:textColor="#EEF2FA"
+                                    android:textSize="15.5sp"
+                                    android:textStyle="bold" />
+
+                                <ImageView
+                                    android:layout_width="16dp"
+                                    android:layout_height="16dp"
+                                    android:layout_marginStart="8dp"
+                                    android:alpha="0.9"
+                                    android:contentDescription="@null"
+                                    android:src="@drawable/ic_chevron_right"
+                                    app:tint="#EEF2FA" />
+                            </LinearLayout>
+
+                            <View
+                                android:layout_width="match_parent"
+                                android:layout_height="1dp"
+                                android:background="#1AFFFFFF" />
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="60dp"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="监听端口"
+                                    android:textColor="#EEF2FA"
+                                    android:textSize="15.5sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="12dp"
+                                    android:text="38472"
+                                    android:textColor="#EEF2FA"
+                                    android:textSize="15.5sp"
+                                    android:textStyle="bold" />
+
+                                <ImageView
+                                    android:layout_width="16dp"
+                                    android:layout_height="16dp"
+                                    android:layout_marginStart="8dp"
+                                    android:alpha="0.9"
+                                    android:contentDescription="@null"
+                                    android:src="@drawable/ic_chevron_right"
+                                    app:tint="#EEF2FA" />
+                            </LinearLayout>
+
+                            <View
+                                android:layout_width="match_parent"
+                                android:layout_height="1dp"
+                                android:background="#1AFFFFFF" />
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="60dp"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="下游密钥"
+                                    android:textColor="#EEF2FA"
+                                    android:textSize="15.5sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="12dp"
+                                    android:text="••••••••"
+                                    android:textColor="#EEF2FA"
+                                    android:textSize="15.5sp"
+                                    android:textStyle="bold" />
+
+                                <ImageView
+                                    android:layout_width="16dp"
+                                    android:layout_height="16dp"
+                                    android:layout_marginStart="8dp"
+                                    android:alpha="0.9"
+                                    android:contentDescription="@null"
+                                    android:src="@drawable/ic_chevron_right"
+                                    app:tint="#EEF2FA" />
+                            </LinearLayout>
+
+                            <!-- .row.note: auto height, 0 16 10 padding, 11.5px #b3c1da -->
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:paddingBottom="10dp"
+                                android:text="重新生成 Key 需重启网关生效"
+                                android:textColor="#B3C1DA"
+                                android:textSize="11.5sp" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <!-- .card.duo -->
+                    <LinearLayout
+                        android:orientation="vertical"
+                        android:background="@drawable/pv_card"
+                        android:elevation="14dp"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="14dp">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal"
+                            android:padding="16dp">
+
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:orientation="vertical">
+
+                                <TextView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:text="客户端接入地址"
+                                    android:textColor="#A6B2C9"
+                                    android:textSize="11.5sp" />
+
+                                <TextView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="3dp"
+                                    android:text="http://127.0.0.1:38472/v1"
+                                    android:textColor="#9DB9FF"
+                                    android:textSize="13sp"
+                                    android:textStyle="bold" />
+                            </LinearLayout>
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="12dp"
+                                android:paddingStart="4dp"
+                                android:paddingTop="8dp"
+                                android:paddingEnd="4dp"
+                                android:paddingBottom="8dp"
+                                android:text="复制"
+                                android:textColor="#7AA2FF"
+                                android:textSize="14sp"
+                                android:textStyle="bold" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="4dp"
+                        android:layout_marginTop="20dp"
+                        android:layout_marginBottom="10dp"
+                        android:letterSpacing="0.048"
+                        android:text="功能测试"
+                        android:textColor="#A6B2C9"
+                        android:textSize="12.5sp"
+                        android:textStyle="bold" />
+
+                    <!-- .card with 13px padding: two 40px buttons, a 38px field, a result box -->
+                    <LinearLayout
+                        android:orientation="vertical"
+                        android:background="@drawable/pv_card"
+                        android:elevation="14dp"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="14dp">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:padding="13dp">
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginBottom="10dp"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:layout_width="0dp"
+                                    android:layout_height="40dp"
+                                    android:layout_weight="1"
+                                    android:background="@drawable/pv_tbtn"
+                                    android:gravity="center"
+                                    android:text="拉取模型"
+                                    android:textColor="#CDDCFF"
+                                    android:textSize="13.5sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:layout_width="0dp"
+                                    android:layout_height="40dp"
+                                    android:layout_marginStart="10dp"
+                                    android:layout_weight="1"
+                                    android:background="@drawable/pv_tbtn"
+                                    android:gravity="center"
+                                    android:text="测试消息"
+                                    android:textColor="#CDDCFF"
+                                    android:textSize="13.5sp"
+                                    android:textStyle="bold" />
+                            </LinearLayout>
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="38dp"
+                                android:layout_marginBottom="10dp"
+                                android:background="@drawable/pv_field"
+                                android:gravity="center_vertical"
+                                android:paddingStart="12dp"
+                                android:paddingEnd="12dp"
+                                android:text="模型 ID（可选）"
+                                android:textColor="#7D8BA5"
+                                android:textSize="13sp" />
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:background="@drawable/pv_result"
+                                android:fontFamily="monospace"
+                                android:lineSpacingMultiplier="1.6"
+                                android:minHeight="64dp"
+                                android:paddingStart="12dp"
+                                android:paddingTop="9dp"
+                                android:paddingEnd="12dp"
+                                android:paddingBottom="9dp"
+                                android:text="未启动网关"
+                                android:textColor="#B9C7E2"
+                                android:textSize="11.5sp" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <!-- .primary: 54px tall, 16px radius, 20% accent -->
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="54dp"
+                        android:layout_marginTop="10dp"
+                        android:layout_marginBottom="4dp"
+                        android:background="@drawable/pv_primary"
+                        android:gravity="center"
+                        android:letterSpacing="0.062"
+                        android:text="停止网关"
+                        android:textColor="#EEF2FA"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <!-- ================= page 1: providers ================= -->
+                <LinearLayout
+                    android:id="@+id/pvPage1"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingTop="6dp"
+                    android:visibility="gone">
+
+                    <!-- .cfg.on: 20% fill, 62% accent border, 3px accent rail on the left -->
+                    <LinearLayout
+                        android:orientation="vertical"
+                        android:background="@drawable/pv_card_on"
+                        android:elevation="8dp"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="10dp">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal"
+                            android:paddingStart="16dp"
+                            android:paddingTop="14dp"
+                            android:paddingEnd="14dp"
+                            android:paddingBottom="14dp">
+
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:orientation="vertical">
+
+                                <TextView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:letterSpacing="0.013"
+                                    android:text="默认供应商"
+                                    android:textColor="#EEF2FA"
+                                    android:textSize="15.5sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="4dp"
+                                    android:ellipsize="end"
+                                    android:maxLines="1"
+                                    android:text="api.example.com/v1"
+                                    android:textColor="#A9B8D2"
+                                    android:textSize="12sp" />
+                            </LinearLayout>
+
+                            <TextView
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:background="@drawable/pv_cur_badge"
+                                android:paddingStart="7dp"
+                                android:paddingTop="3dp"
+                                android:paddingEnd="7dp"
+                                android:paddingBottom="3dp"
+                                android:text="使用中"
+                                android:textColor="#7AA2FF"
+                                android:textSize="11sp"
+                                android:textStyle="bold" />
+
+                            <TextView
+                                android:layout_width="28dp"
+                                android:layout_height="28dp"
+                                android:gravity="center"
+                                android:letterSpacing="-0.06"
+                                android:text="···"
+                                android:textColor="#8093B3"
+                                android:textSize="17sp" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:orientation="vertical"
+                        android:background="@drawable/pv_cfg"
+                        android:elevation="8dp"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="10dp">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal"
+                            android:paddingStart="16dp"
+                            android:paddingTop="14dp"
+                            android:paddingEnd="14dp"
+                            android:paddingBottom="14dp">
+
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:orientation="vertical">
+
+                                <TextView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:letterSpacing="0.013"
+                                    android:text="备用供应商"
+                                    android:textColor="#EEF2FA"
+                                    android:textSize="15.5sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="4dp"
+                                    android:ellipsize="end"
+                                    android:maxLines="1"
+                                    android:text="api.example.org/v1"
+                                    android:textColor="#A9B8D2"
+                                    android:textSize="12sp" />
+                            </LinearLayout>
+
+                            <TextView
+                                android:layout_width="28dp"
+                                android:layout_height="28dp"
+                                android:gravity="center"
+                                android:letterSpacing="-0.06"
+                                android:text="···"
+                                android:textColor="#8093B3"
+                                android:textSize="17sp" />
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:orientation="vertical"
+                        android:background="@drawable/pv_cfg"
+                        android:elevation="8dp"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="10dp">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal"
+                            android:paddingStart="16dp"
+                            android:paddingTop="14dp"
+                            android:paddingEnd="14dp"
+                            android:paddingBottom="14dp">
+
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:orientation="vertical">
+
+                                <TextView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:letterSpacing="0.013"
+                                    android:text="本地中转"
+                                    android:textColor="#EEF2FA"
+                                    android:textSize="15.5sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="4dp"
+                                    android:ellipsize="end"
+                                    android:maxLines="1"
+                                    android:text="127.0.0.1:8080/v1"
+                                    android:textColor="#A9B8D2"
+                                    android:textSize="12sp" />
+                            </LinearLayout>
+
+                            <TextView
+                                android:layout_width="28dp"
+                                android:layout_height="28dp"
+                                android:gravity="center"
+                                android:letterSpacing="-0.06"
+                                android:text="···"
+                                android:textColor="#8093B3"
+                                android:textSize="17sp" />
+                        </LinearLayout>
+                    </LinearLayout>
+                </LinearLayout>
+
+                <!-- ================= page 2: routing ================= -->
+                <LinearLayout
+                    android:id="@+id/pvPage2"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="4dp"
+                        android:layout_marginTop="8dp"
+                        android:layout_marginBottom="10dp"
+                        android:letterSpacing="0.048"
+                        android:text="路由与还原"
+                        android:textColor="#A6B2C9"
+                        android:textSize="12.5sp"
+                        android:textStyle="bold" />
+
+                    <LinearLayout
+                        android:orientation="vertical"
+                        android:background="@drawable/pv_card"
+                        android:elevation="14dp"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="14dp">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:paddingStart="16dp"
+                            android:paddingTop="8dp"
+                            android:paddingEnd="16dp"
+                            android:paddingBottom="8dp">
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="60dp"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="防路由等级"
+                                    android:textColor="#EEF2FA"
+                                    android:textSize="15.5sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="12dp"
+                                    android:text="Standard"
+                                    android:textColor="#EEF2FA"
+                                    android:textSize="15.5sp"
+                                    android:textStyle="bold" />
+
+                                <ImageView
+                                    android:layout_width="16dp"
+                                    android:layout_height="16dp"
+                                    android:layout_marginStart="8dp"
+                                    android:alpha="0.9"
+                                    android:contentDescription="@null"
+                                    android:src="@drawable/ic_chevron_right"
+                                    app:tint="#EEF2FA" />
+                            </LinearLayout>
+
+                            <View
+                                android:layout_width="match_parent"
+                                android:layout_height="1dp"
+                                android:background="#1AFFFFFF" />
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="60dp"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="熵注入"
+                                    android:textColor="#EEF2FA"
+                                    android:textSize="15.5sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="12dp"
+                                    android:text="Standard"
+                                    android:textColor="#EEF2FA"
+                                    android:textSize="15.5sp"
+                                    android:textStyle="bold" />
+
+                                <ImageView
+                                    android:layout_width="16dp"
+                                    android:layout_height="16dp"
+                                    android:layout_marginStart="8dp"
+                                    android:alpha="0.9"
+                                    android:contentDescription="@null"
+                                    android:src="@drawable/ic_chevron_right"
+                                    app:tint="#EEF2FA" />
+                            </LinearLayout>
+
+                            <View
+                                android:layout_width="match_parent"
+                                android:layout_height="1dp"
+                                android:background="#1AFFFFFF" />
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="60dp"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="模型上报"
+                                    android:textColor="#EEF2FA"
+                                    android:textSize="15.5sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="12dp"
+                                    android:text="响应头"
+                                    android:textColor="#EEF2FA"
+                                    android:textSize="15.5sp"
+                                    android:textStyle="bold" />
+
+                                <ImageView
+                                    android:layout_width="16dp"
+                                    android:layout_height="16dp"
+                                    android:layout_marginStart="8dp"
+                                    android:alpha="0.9"
+                                    android:contentDescription="@null"
+                                    android:src="@drawable/ic_chevron_right"
+                                    app:tint="#EEF2FA" />
+                            </LinearLayout>
+
+                            <View
+                                android:layout_width="match_parent"
+                                android:layout_height="1dp"
+                                android:background="#1AFFFFFF" />
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="60dp"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="流式还原"
+                                    android:textColor="#EEF2FA"
+                                    android:textSize="15.5sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="12dp"
+                                    android:text="开启"
+                                    android:textColor="#EEF2FA"
+                                    android:textSize="15.5sp"
+                                    android:textStyle="bold" />
+
+                                <ImageView
+                                    android:layout_width="16dp"
+                                    android:layout_height="16dp"
+                                    android:layout_marginStart="8dp"
+                                    android:alpha="0.9"
+                                    android:contentDescription="@null"
+                                    android:src="@drawable/ic_chevron_right"
+                                    app:tint="#EEF2FA" />
+                            </LinearLayout>
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="4dp"
+                        android:layout_marginTop="20dp"
+                        android:layout_marginBottom="10dp"
+                        android:letterSpacing="0.048"
+                        android:text="诊断"
+                        android:textColor="#A6B2C9"
+                        android:textSize="12.5sp"
+                        android:textStyle="bold" />
+
+                    <LinearLayout
+                        android:orientation="vertical"
+                        android:background="@drawable/pv_card"
+                        android:elevation="14dp"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginBottom="14dp">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:paddingStart="16dp"
+                            android:paddingTop="8dp"
+                            android:paddingEnd="16dp"
+                            android:paddingBottom="8dp">
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="60dp"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="运行日志"
+                                    android:textColor="#EEF2FA"
+                                    android:textSize="15.5sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="12dp"
+                                    android:text="查看"
+                                    android:textColor="#C2CFE8"
+                                    android:textSize="13sp" />
+
+                                <ImageView
+                                    android:layout_width="16dp"
+                                    android:layout_height="16dp"
+                                    android:layout_marginStart="8dp"
+                                    android:alpha="0.9"
+                                    android:contentDescription="@null"
+                                    android:src="@drawable/ic_chevron_right"
+                                    app:tint="#EEF2FA" />
+                            </LinearLayout>
+
+                            <View
+                                android:layout_width="match_parent"
+                                android:layout_height="1dp"
+                                android:background="#1AFFFFFF" />
+
+                            <LinearLayout
+                                android:layout_width="match_parent"
+                                android:layout_height="60dp"
+                                android:gravity="center_vertical"
+                                android:orientation="horizontal">
+
+                                <TextView
+                                    android:layout_width="0dp"
+                                    android:layout_height="wrap_content"
+                                    android:layout_weight="1"
+                                    android:text="崩溃日志"
+                                    android:textColor="#EEF2FA"
+                                    android:textSize="15.5sp"
+                                    android:textStyle="bold" />
+
+                                <TextView
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginStart="12dp"
+                                    android:text="查看"
+                                    android:textColor="#C2CFE8"
+                                    android:textSize="13sp" />
+
+                                <ImageView
+                                    android:layout_width="16dp"
+                                    android:layout_height="16dp"
+                                    android:layout_marginStart="8dp"
+                                    android:alpha="0.9"
+                                    android:contentDescription="@null"
+                                    android:src="@drawable/ic_chevron_right"
+                                    app:tint="#EEF2FA" />
+                            </LinearLayout>
+                        </LinearLayout>
+                    </LinearLayout>
+                </LinearLayout>
+            </LinearLayout>
+        </ScrollView>
+
+        <!-- .tabs: 62px tall, 0 6 6 padding, 62% dark glass, hairline top border -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="62dp"
+            android:id="@+id/pvTabs"
+            android:background="@drawable/pv_tabs"
+            android:orientation="horizontal"
+            android:paddingStart="6dp"
+            android:paddingEnd="6dp"
+            android:paddingBottom="6dp">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingTop="4dp">
+
+                <ImageView
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_tab_gateway"
+                    app:tint="#EEF2FA" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="3dp"
+                    android:letterSpacing="0.036"
+                    android:text="网关"
+                    android:textColor="#EEF2FA"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingTop="4dp">
+
+                <ImageView
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_tab_provider"
+                    app:tint="#7286A6" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="3dp"
+                    android:letterSpacing="0.036"
+                    android:text="供应商"
+                    android:textColor="#7286A6"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:gravity="center_horizontal"
+                android:orientation="vertical"
+                android:paddingTop="4dp">
+
+                <ImageView
+                    android:layout_width="22dp"
+                    android:layout_height="22dp"
+                    android:contentDescription="@null"
+                    android:src="@drawable/ic_tab_route"
+                    app:tint="#7286A6" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="3dp"
+                    android:letterSpacing="0.036"
+                    android:text="路由"
+                    android:textColor="#7286A6"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

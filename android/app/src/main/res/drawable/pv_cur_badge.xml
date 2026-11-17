@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- .cur: accent 15% pill, 7px radius. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#267AA2FF" />
+    <corners android:radius="7dp" />
+</shape>

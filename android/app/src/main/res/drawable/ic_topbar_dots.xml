@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- .dots i{width:3.4px;height:3.4px;border-radius:50%} at translateY(-6px / 0 / 6px)
+     Rendered on a 20dp canvas: three 3.4 units wide dots centred at cy 4 / 10 / 16. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="20dp"
+    android:height="20dp"
+    android:viewportWidth="20"
+    android:viewportHeight="20">
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M10,2.3a1.7,1.7 0 1 0 0,3.4a1.7,1.7 0 1 0 0,-3.4z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M10,8.3a1.7,1.7 0 1 0 0,3.4a1.7,1.7 0 1 0 0,-3.4z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M10,14.3a1.7,1.7 0 1 0 0,3.4a1.7,1.7 0 1 0 0,-3.4z" />
+</vector>

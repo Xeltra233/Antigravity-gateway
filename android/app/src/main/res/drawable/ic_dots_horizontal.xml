@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The .more button of the reference board renders the text "···": three dots on one line.
+     Same 3.4dp dot as ic_topbar_dots, rotated to the horizontal axis on the 20dp canvas. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="20dp"
+    android:height="20dp"
+    android:viewportWidth="20"
+    android:viewportHeight="20">
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M2.3,8.3a1.7,1.7 0 1 0 3.4,0a1.7,1.7 0 1 0 -3.4,0z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M8.3,8.3a1.7,1.7 0 1 0 3.4,0a1.7,1.7 0 1 0 -3.4,0z" />
+    <path
+        android:fillColor="#FF000000"
+        android:pathData="M14.3,8.3a1.7,1.7 0 1 0 3.4,0a1.7,1.7 0 1 0 -3.4,0z" />
+</vector>

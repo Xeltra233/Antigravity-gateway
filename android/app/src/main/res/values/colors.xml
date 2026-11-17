@@ -14,4 +14,7 @@
     <color name="success">#388E3C</color>
     <color name="error">#D32F2F</color>
     <color name="ic_launcher_background">#1A1B26</color>
+    <!-- acr tab bar selected and unselected text colours -->
+    <color name="pv_tab_on">#EEF2FA</color>
+    <color name="pv_tab_off">#7286A6</color>
 </resources>

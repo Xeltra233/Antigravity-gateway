@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- acr .primary: rgba(150,175,225,.2) fill, rgba(255,255,255,.2) border, 16px radius. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#3396AFE1" />
+    <corners android:radius="16dp" />
+</shape>

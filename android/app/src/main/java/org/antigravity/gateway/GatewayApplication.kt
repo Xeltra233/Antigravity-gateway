@@ -41,5 +41,15 @@ class GatewayApplication : Application() {
         @Volatile
         var safeMode: Boolean = false
             private set
+
+        /**
+         * Clears the safe-mode state once a launch proved healthy. [CrashReporter.markStartupHealthy]
+         * only rewrites the counter file; these fields were read in [onCreate] and would otherwise
+         * keep reporting the pre-reset count for the rest of the process.
+         */
+        fun clearSafeMode() {
+            startupAttempts = 0
+            safeMode = false
+        }
     }
 }
