@@ -9,7 +9,7 @@
     android:layout_height="match_parent"
     android:background="?android:attr/colorBackground">
 
-    <org.antigravity.gateway.ui.SilkRibbonView
+    <org.helix.gateway.ui.SilkRibbonView
         android:id="@+id/silkBackdrop"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
@@ -73,7 +73,7 @@
                     android:visibility="gone"
                     app:tint="?attr/agwIconTint" />
 
-                <org.antigravity.gateway.ui.StyleToggleView
+                <org.helix.gateway.ui.StyleToggleView
                     android:id="@+id/btnStyle"
                     android:layout_width="36dp"
                     android:layout_height="36dp"

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"sort"
 
-	"antigravity-gateway/internal/entropy"
+	"helix-gateway/internal/entropy"
 )
 
 // jsonStyle selects the wire layout used for an outbound request body.

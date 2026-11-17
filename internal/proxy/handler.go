@@ -9,10 +9,10 @@ import (
 	"net/http"
 	"strings"
 
-	"antigravity-gateway/internal/config"
-	"antigravity-gateway/internal/keymgmt"
-	"antigravity-gateway/internal/limits"
-	"antigravity-gateway/internal/server"
+	"helix-gateway/internal/config"
+	"helix-gateway/internal/keymgmt"
+	"helix-gateway/internal/limits"
+	"helix-gateway/internal/server"
 )
 
 type contextKey string

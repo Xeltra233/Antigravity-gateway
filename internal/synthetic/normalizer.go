@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"antigravity-gateway/internal/config"
+	"helix-gateway/internal/config"
 )
 
 type NormalizeStats struct {

@@ -5,7 +5,7 @@ import (
 	"reflect"
 	"testing"
 
-	"antigravity-gateway/internal/entropy"
+	"helix-gateway/internal/entropy"
 )
 
 func sampleBody() map[string]any {

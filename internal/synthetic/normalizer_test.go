@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"antigravity-gateway/internal/config"
+	"helix-gateway/internal/config"
 )
 
 func TestNormalizeNonStreamingSyntheticOnly(t *testing.T) {

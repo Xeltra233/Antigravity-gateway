@@ -168,12 +168,12 @@ func TestHeadersSkipRequestedWhenIdentical(t *testing.T) {
 func TestInjectBody(t *testing.T) {
 	info := Identify("claude-sonnet-4").WithResponse(nil, []byte(`{"model":"claude-sonnet-4-20250514"}`))
 	body := []byte(`{"id":"x","choices":[]}`)
-	out := info.InjectBody(body, "antigravity_model")
+	out := info.InjectBody(body, "helix_model")
 	var m map[string]any
 	if err := json.Unmarshal(out, &m); err != nil {
 		t.Fatalf("injected body is not valid JSON: %v", err)
 	}
-	obj, ok := m["antigravity_model"].(map[string]any)
+	obj, ok := m["helix_model"].(map[string]any)
 	if !ok {
 		t.Fatalf("missing identification object: %s", out)
 	}
@@ -191,8 +191,8 @@ func TestInjectBody(t *testing.T) {
 
 func TestInjectBodyRespectsExistingKey(t *testing.T) {
 	info := Identify("gemini-2.5-pro")
-	body := []byte(`{"antigravity_model":{"model":"already-set"}}`)
-	out := info.InjectBody(body, "antigravity_model")
+	body := []byte(`{"helix_model":{"model":"already-set"}}`)
+	out := info.InjectBody(body, "helix_model")
 	if string(out) != string(body) {
 		t.Fatalf("existing key must not be overwritten: %s", out)
 	}

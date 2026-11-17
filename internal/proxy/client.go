@@ -12,9 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"antigravity-gateway/internal/config"
-	"antigravity-gateway/internal/entropy"
-	"antigravity-gateway/internal/limits"
+	"helix-gateway/internal/config"
+	"helix-gateway/internal/entropy"
+	"helix-gateway/internal/limits"
 )
 
 // upstreamUserAgents is a small pool of realistic browser profiles. The header
@@ -68,9 +68,12 @@ func NewUpstreamClient(cfg *config.Config) *UpstreamClient {
 		},
 	}
 
+	// No Client.Timeout here on purpose: it budgets the whole request,
+	// body read included, so a long generation would be cut off mid-stream
+	// even though both sides are healthy. Connection setup is bounded by
+	// ResponseHeaderTimeout and the body by the per-path limits below.
 	httpClient := &http.Client{
 		Transport: transport,
-		Timeout:   cfg.UpstreamTimeout,
 	}
 
 	return &UpstreamClient{

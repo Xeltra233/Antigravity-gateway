@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"antigravity-gateway/internal/config"
-	"antigravity-gateway/internal/keymgmt"
-	"antigravity-gateway/internal/proxy"
+	"helix-gateway/internal/config"
+	"helix-gateway/internal/keymgmt"
+	"helix-gateway/internal/proxy"
 )
 
 func TestOrchestratorNonStreamingAndRetry(t *testing.T) {

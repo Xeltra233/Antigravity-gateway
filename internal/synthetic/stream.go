@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"strings"
 
-	"antigravity-gateway/internal/config"
+	"helix-gateway/internal/config"
 )
 
 type StreamStats struct {
@@ -17,6 +17,18 @@ type StreamStats struct {
 	SyntheticCallCount int
 	ContentConflict    bool
 	BytesWritten       int64
+	// Heartbeats counts the keep-alive comments the gateway emitted itself.
+	Heartbeats int
+	// CommentsForwarded counts upstream SSE comment frames passed downstream.
+	CommentsForwarded int
+	// UpstreamError reports that the upstream sent an error frame. No [DONE]
+	// is written in that case, so clients can tell the failure apart from a
+	// normal end of stream.
+	UpstreamError bool
+	// SawDone and SawFinish record what the upstream signalled before the
+	// connection ended. A stream that ends without either one is truncated.
+	SawDone   bool
+	SawFinish bool
 }
 
 type ChoiceStreamState struct {
@@ -50,6 +62,7 @@ type RawChunk struct {
 	Model   string           `json:"model"`
 	Choices []RawChunkChoice `json:"choices"`
 	Usage   any              `json:"usage,omitempty"`
+	Error   any              `json:"error,omitempty"`
 }
 
 type RawChunkChoice struct {
@@ -78,8 +91,41 @@ type RawChunkFunctionCallDesc struct {
 	Arguments string `json:"arguments,omitempty"`
 }
 
+// Transform forwards an upstream SSE stream to the downstream client.
+//
+// Everything the upstream frames explicitly is preserved: comment frames and
+// event/id/retry field lines reach the client unchanged, because dropping them
+// removes the only liveness signal a long-running generation has. Payloads the
+// transformer cannot parse are forwarded verbatim instead of being discarded.
+//
+// The stream terminator is only written for a stream that actually finished.
+// A truncated or failed upstream leaves the downstream without [DONE], which is
+// what client-side anti-truncation logic keys on.
 func (st *StreamTransformer) Transform(upstreamReader io.Reader, w io.Writer, flusher http.Flusher) (*StreamStats, error) {
 	stats := &StreamStats{}
+
+	hb := NewHeartbeatWriter(w, flusher, st.cfg.StreamHeartbeat)
+	defer func() {
+		if hb != nil {
+			hb.Close()
+			stats.Heartbeats = hb.HeartbeatsSent()
+		}
+	}()
+
+	var out io.Writer = w
+	if hb != nil {
+		out = hb
+	}
+
+	emit := func(s string) error {
+		n, err := io.WriteString(out, s)
+		stats.BytesWritten += int64(n)
+		if flusher != nil {
+			flusher.Flush()
+		}
+		return err
+	}
+
 	scanner := bufio.NewScanner(upstreamReader)
 	// Buffer size up to max response chunk
 	buf := make([]byte, 64*1024)
@@ -101,45 +147,107 @@ func (st *StreamTransformer) Transform(upstreamReader io.Reader, w io.Writer, fl
 		return s
 	}
 
+	// prefix holds the SSE field lines (event/id/retry) that belong to the
+	// payload arriving next. They are emitted ahead of that payload so the
+	// frame keeps its original shape.
+	var prefix []string
+
+	emitFrame := func(fieldLines []string, data []byte) error {
+		var sb strings.Builder
+		for _, p := range fieldLines {
+			sb.WriteString(p)
+			sb.WriteString("\n")
+		}
+		sb.WriteString("data: ")
+		sb.Write(data)
+		sb.WriteString("\n\n")
+		return emit(sb.String())
+	}
+
 	writeSSEData := func(data any) error {
 		b, err := json.Marshal(data)
 		if err != nil {
 			return err
 		}
-		msg := fmt.Sprintf("data: %s\n\n", string(b))
-		n, err := io.WriteString(w, msg)
-		stats.BytesWritten += int64(n)
-		if flusher != nil {
-			flusher.Flush()
-		}
-		return err
+		return emitFrame(prefix, b)
 	}
+
+	writeStreamError := func(msg string) {
+		payload, _ := json.Marshal(map[string]any{
+			"error": map[string]any{
+				"message": msg,
+				"type":    "upstream_stream_error",
+				"code":    "stream_interrupted",
+			},
+		})
+		_ = emit("event: error\ndata: " + string(payload) + "\n\n")
+	}
+
+	var readErr error
 
 	for scanner.Scan() {
 		line := scanner.Text()
 		trimmed := strings.TrimSpace(line)
 
 		if trimmed == "" {
+			// End of an SSE frame. Any field lines still buffered were not
+			// followed by a payload, so they are passed through as-is.
+			if len(prefix) > 0 {
+				var sb strings.Builder
+				for _, p := range prefix {
+					sb.WriteString(p)
+					sb.WriteString("\n")
+				}
+				sb.WriteString("\n")
+				_ = emit(sb.String())
+				prefix = nil
+			}
 			continue
 		}
 
 		if strings.HasPrefix(trimmed, ":") {
-			// SSE comment/ping, forward or ignore
+			// SSE comment / keep-alive. Forward it: this is the upstream's own
+			// liveness signal and the client may rely on it.
+			stats.CommentsForwarded++
+			_ = emit(line + "\n\n")
 			continue
 		}
 
-		if !strings.HasPrefix(trimmed, "data:") {
+		switch {
+		case strings.HasPrefix(trimmed, "event:"),
+			strings.HasPrefix(trimmed, "id:"),
+			strings.HasPrefix(trimmed, "retry:"):
+			prefix = append(prefix, trimmed)
+			continue
+		case !strings.HasPrefix(trimmed, "data:"):
+			// Unknown field line; keep it rather than silently losing framing.
+			prefix = append(prefix, trimmed)
 			continue
 		}
 
 		dataContent := strings.TrimSpace(strings.TrimPrefix(trimmed, "data:"))
 		if dataContent == "[DONE]" {
+			stats.SawDone = true
+			prefix = nil
+			// The terminator is written once, after the loop, so both paths
+			// produce the same framing.
 			break
 		}
 
 		var chunk RawChunk
 		if err := json.Unmarshal([]byte(dataContent), &chunk); err != nil {
-			// Raw unparseable chunk, ignore or log
+			// Not a payload this gateway understands. Forward it verbatim so a
+			// provider-specific frame is not lost in translation.
+			_ = emitFrame(prefix, []byte(dataContent))
+			prefix = nil
+			continue
+		}
+
+		// Upstream error frame (no choices, error object present).
+		if chunk.Error != nil && len(chunk.Choices) == 0 {
+			stats.UpstreamError = true
+			_ = emitFrame(prefix, []byte(dataContent))
+			prefix = nil
 			continue
 		}
 
@@ -154,6 +262,7 @@ func (st *StreamTransformer) Transform(upstreamReader io.Reader, w io.Writer, fl
 				"usage":   chunk.Usage,
 			}
 			_ = writeSSEData(usageChunk)
+			prefix = nil
 			continue
 		}
 
@@ -367,6 +476,7 @@ func (st *StreamTransformer) Transform(upstreamReader io.Reader, w io.Writer, fl
 			// Process finish_reason
 			if c.FinishReason != nil {
 				finishReasonStr, _ := c.FinishReason.(string)
+				stats.SawFinish = true
 
 				// If choice had synthetic call, check if remaining finish reason was tool_calls
 				if state.HasSynthetic {
@@ -438,15 +548,36 @@ func (st *StreamTransformer) Transform(upstreamReader io.Reader, w io.Writer, fl
 				_ = writeSSEData(finalChunk)
 			}
 		}
+
+		// The frame has been consumed, so pending field lines no longer apply.
+		prefix = nil
 	}
 
 	if err := scanner.Err(); err != nil && err != io.EOF {
-		return stats, fmt.Errorf("error reading upstream SSE stream: %w", err)
+		readErr = err
 	}
 
-	// Emit [DONE]
-	doneMsg := "data: [DONE]\n\n"
-	n, _ := io.WriteString(w, doneMsg)
+	// Decide how the stream terminates.
+	//
+	// A terminator is a promise that the response is complete. Writing one for
+	// a truncated stream turns a detectable failure into a silent one, so it is
+	// only written when the upstream actually finished.
+	switch {
+	case stats.UpstreamError:
+		// The upstream's own error frame was forwarded; leave it as the last
+		// thing the client sees.
+		return stats, nil
+	case readErr != nil:
+		writeStreamError("upstream stream interrupted: " + readErr.Error())
+		return stats, fmt.Errorf("error reading upstream SSE stream: %w", readErr)
+	case !stats.SawDone && !stats.SawFinish:
+		writeStreamError("upstream stream ended without a finish_reason or [DONE]")
+		return stats, fmt.Errorf("upstream SSE stream ended without terminator")
+	}
+
+	// Emit [DONE] for a stream that already carried one, so the client gets the
+	// terminating frame from exactly one place.
+	n, _ := io.WriteString(out, "data: [DONE]\n\n")
 	stats.BytesWritten += int64(n)
 	if flusher != nil {
 		flusher.Flush()

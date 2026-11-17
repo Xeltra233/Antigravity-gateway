@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"antigravity-gateway/internal/config"
-	"antigravity-gateway/internal/keymgmt"
+	"helix-gateway/internal/config"
+	"helix-gateway/internal/keymgmt"
 )
 
 func TestProxyModelsVerbatimAndCache(t *testing.T) {

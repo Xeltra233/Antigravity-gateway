@@ -20,7 +20,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"antigravity-gateway/internal/config"
+	"helix-gateway/internal/config"
 )
 
 var (

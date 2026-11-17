@@ -98,7 +98,7 @@ jobs:
       - name: Verify APK Signature
         run: |
           set -euo pipefail
-          APK=$(ls android/app/build/outputs/apk/release/antigravity-gateway-*.apk | head -1)
+          APK=$(ls android/app/build/outputs/apk/release/helix-gateway-*.apk | head -1)
           BT=$(ls -d "${ANDROID_HOME:-$ANDROID_SDK_ROOT}"/build-tools/* | sort -V | tail -1)
           "$BT/apksigner" verify --print-certs "$APK" | tee /tmp/certs.txt
           # apksigner changed this label between build-tools releases ("Signer #1 certificate" in
@@ -117,7 +117,7 @@ jobs:
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: antigravity-gateway-apk
-          path: android/app/build/outputs/apk/release/antigravity-gateway-*.apk
+          name: helix-gateway-apk
+          path: android/app/build/outputs/apk/release/helix-gateway-*.apk
           retention-days: 14
           if-no-files-found: error

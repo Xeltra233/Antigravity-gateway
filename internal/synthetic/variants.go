@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"antigravity-gateway/internal/entropy"
+	"helix-gateway/internal/entropy"
 )
 
 // The pools below only describe the gateway's own transport scaffolding. They

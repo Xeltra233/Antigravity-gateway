@@ -8,17 +8,17 @@ import (
 	"strings"
 	"time"
 
-	"antigravity-gateway/internal/config"
-	"antigravity-gateway/internal/keymgmt"
-	"antigravity-gateway/internal/logger"
-	"antigravity-gateway/internal/metrics"
-	"antigravity-gateway/internal/proxy"
-	"antigravity-gateway/internal/recovery"
-	"antigravity-gateway/internal/server"
+	"helix-gateway/internal/config"
+	"helix-gateway/internal/keymgmt"
+	"helix-gateway/internal/logger"
+	"helix-gateway/internal/metrics"
+	"helix-gateway/internal/proxy"
+	"helix-gateway/internal/recovery"
+	"helix-gateway/internal/server"
 )
 
 var (
-	Version   = "1.0.21"
+	Version   = "2.0.0"
 	GitCommit = "none"
 	BuildTime = "unknown"
 )
@@ -107,7 +107,7 @@ func main() {
 	if len(os.Args) > 1 {
 		arg := strings.ToLower(os.Args[1])
 		if arg == "-v" || arg == "-version" || arg == "--version" || arg == "version" {
-			fmt.Printf("Antigravity Gateway version %s (commit: %s, built: %s)\n", Version, GitCommit, BuildTime)
+			fmt.Printf("Helix Gateway version %s (commit: %s, built: %s)\n", Version, GitCommit, BuildTime)
 			os.Exit(0)
 		}
 	}
@@ -122,7 +122,7 @@ func main() {
 	if cfg.EnvFileLoaded != "" {
 		slog.Info("loaded configuration from .env file", "path", cfg.EnvFileLoaded)
 	}
-	slog.Info("starting antigravity-gateway",
+	slog.Info("starting helix-gateway",
 		"version", Version,
 		"git_commit", GitCommit,
 		"build_time", BuildTime,

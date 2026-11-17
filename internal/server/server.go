@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"antigravity-gateway/internal/config"
+	"helix-gateway/internal/config"
 )
 
 type Server struct {

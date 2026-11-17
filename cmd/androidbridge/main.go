@@ -28,7 +28,7 @@ import (
 	"sync"
 	"unsafe"
 
-	"antigravity-gateway/pkg/gateway"
+	"helix-gateway/pkg/gateway"
 )
 
 var (
@@ -52,8 +52,8 @@ func createJString(env *C.JNIEnv, str string) C.jstring {
 	return C.create_jstring(env, cStr)
 }
 
-//export Java_org_antigravity_gateway_bridge_GatewayBridge_nativeStartGateway
-func Java_org_antigravity_gateway_bridge_GatewayBridge_nativeStartGateway(
+//export Java_org_helix_gateway_bridge_GatewayBridge_nativeStartGateway
+func Java_org_helix_gateway_bridge_GatewayBridge_nativeStartGateway(
 	env *C.JNIEnv,
 	clazz C.jclass,
 	jUpstreamUrl C.jstring,
@@ -138,8 +138,8 @@ jPort C.jint,
 	return 0
 }
 
-//export Java_org_antigravity_gateway_bridge_GatewayBridge_nativeStopGateway
-func Java_org_antigravity_gateway_bridge_GatewayBridge_nativeStopGateway(
+//export Java_org_helix_gateway_bridge_GatewayBridge_nativeStopGateway
+func Java_org_helix_gateway_bridge_GatewayBridge_nativeStopGateway(
 	env *C.JNIEnv,
 	clazz C.jclass,
 ) C.jint {
@@ -160,8 +160,8 @@ func Java_org_antigravity_gateway_bridge_GatewayBridge_nativeStopGateway(
 	return 0
 }
 
-//export Java_org_antigravity_gateway_bridge_GatewayBridge_nativeIsRunning
-func Java_org_antigravity_gateway_bridge_GatewayBridge_nativeIsRunning(
+//export Java_org_helix_gateway_bridge_GatewayBridge_nativeIsRunning
+func Java_org_helix_gateway_bridge_GatewayBridge_nativeIsRunning(
 	env *C.JNIEnv,
 	clazz C.jclass,
 ) C.jboolean {
@@ -174,8 +174,8 @@ func Java_org_antigravity_gateway_bridge_GatewayBridge_nativeIsRunning(
 	return 0
 }
 
-//export Java_org_antigravity_gateway_bridge_GatewayBridge_nativeGetLastError
-func Java_org_antigravity_gateway_bridge_GatewayBridge_nativeGetLastError(
+//export Java_org_helix_gateway_bridge_GatewayBridge_nativeGetLastError
+func Java_org_helix_gateway_bridge_GatewayBridge_nativeGetLastError(
 	env *C.JNIEnv,
 	clazz C.jclass,
 ) C.jstring {

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"antigravity-gateway/internal/config"
+	"helix-gateway/internal/config"
 )
 
 func TestKeyManagerLifecycle(t *testing.T) {

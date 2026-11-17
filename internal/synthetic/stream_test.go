@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"antigravity-gateway/internal/config"
+	"helix-gateway/internal/config"
 )
 
 func TestIncrementalJSONDecoder(t *testing.T) {
@@ -385,5 +385,99 @@ data: [DONE]
 	output := downstream.String()
 	if !strings.Contains(output, `"total_tokens":15`) {
 		t.Errorf("missing usage chunk in output: %s", output)
+	}
+}
+
+func newStreamCfg() *config.Config {
+	return &config.Config{
+		MaxResponseBytes:      1 << 20,
+		StreamSideBufferBytes: 0,
+	}
+}
+
+// A comment frame is the upstream's own liveness signal; it has to survive the
+// proxy so a long silent generation does not look dead to the client.
+func TestTransformForwardsCommentFrames(t *testing.T) {
+	cfg := newStreamCfg()
+	transformer := NewStreamTransformer(cfg, "")
+
+	upstreamSSE := ": ping\n\ndata: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hi\"},\"finish_reason\":null}]}\n\ndata: [DONE]\n\n"
+
+	var downstream bytes.Buffer
+	stats, err := transformer.Transform(strings.NewReader(upstreamSSE), &downstream, nil)
+	if err != nil {
+		t.Fatalf("transform error: %v", err)
+	}
+	if stats.CommentsForwarded != 1 {
+		t.Errorf("expected 1 forwarded comment, got %d", stats.CommentsForwarded)
+	}
+	if !strings.Contains(downstream.String(), ": ping\n\n") {
+		t.Errorf("comment frame was dropped: %q", downstream.String())
+	}
+}
+
+// A stream that stops without a terminator is a truncated response. Writing
+// [DONE] for it would tell the client everything arrived.
+func TestTransformRejectsTruncatedStream(t *testing.T) {
+	cfg := newStreamCfg()
+	transformer := NewStreamTransformer(cfg, "")
+
+	upstreamSSE := "data: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hi\"},\"finish_reason\":null}]}\n\n"
+
+	var downstream bytes.Buffer
+	stats, err := transformer.Transform(strings.NewReader(upstreamSSE), &downstream, nil)
+	if err == nil {
+		t.Fatal("expected an error for a stream without a terminator")
+	}
+	if stats.SawDone || stats.SawFinish {
+		t.Errorf("unexpected terminator flags: done=%v finish=%v", stats.SawDone, stats.SawFinish)
+	}
+	output := downstream.String()
+	if strings.Contains(output, "data: [DONE]") {
+		t.Errorf("truncated stream must not be closed with [DONE]: %q", output)
+	}
+	if !strings.Contains(output, "event: error") {
+		t.Errorf("expected an error frame: %q", output)
+	}
+}
+
+// An upstream error frame has to reach the client verbatim, and the stream must
+// not be closed with a terminator afterwards.
+func TestTransformForwardsUpstreamErrorFrame(t *testing.T) {
+	cfg := newStreamCfg()
+	transformer := NewStreamTransformer(cfg, "")
+
+	upstreamSSE := "data: {\"error\":{\"message\":\"upstream overloaded\",\"code\":\"overloaded\"}}\n\n"
+
+	var downstream bytes.Buffer
+	stats, err := transformer.Transform(strings.NewReader(upstreamSSE), &downstream, nil)
+	if err != nil {
+		t.Fatalf("transform error: %v", err)
+	}
+	if !stats.UpstreamError {
+		t.Error("expected the upstream error to be recorded")
+	}
+	output := downstream.String()
+	if !strings.Contains(output, "upstream overloaded") {
+		t.Errorf("upstream error payload was swallowed: %q", output)
+	}
+	if strings.Contains(output, "data: [DONE]") {
+		t.Errorf("error stream must not be closed with [DONE]: %q", output)
+	}
+}
+
+// SSE field lines carry meaning for the client; dropping them changes the frame.
+func TestTransformPreservesEventField(t *testing.T) {
+	cfg := newStreamCfg()
+	transformer := NewStreamTransformer(cfg, "")
+
+	upstreamSSE := "event: message\ndata: {\"id\":\"c1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"Hi\"},\"finish_reason\":null}]}\n\ndata: [DONE]\n\n"
+
+	var downstream bytes.Buffer
+	if _, err := transformer.Transform(strings.NewReader(upstreamSSE), &downstream, nil); err != nil {
+		t.Fatalf("transform error: %v", err)
+	}
+	if !strings.Contains(downstream.String(), "event: message\ndata: ") {
+		t.Errorf("event field was dropped: %q", downstream.String())
 	}
 }

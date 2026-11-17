@@ -13,12 +13,12 @@ import (
 	"strings"
 	"time"
 
-	"antigravity-gateway/internal/config"
-	"antigravity-gateway/internal/keymgmt"
-	"antigravity-gateway/internal/proxy"
-	"antigravity-gateway/internal/recovery"
-	"antigravity-gateway/internal/server"
-	"antigravity-gateway/internal/synthetic"
+	"helix-gateway/internal/config"
+	"helix-gateway/internal/keymgmt"
+	"helix-gateway/internal/proxy"
+	"helix-gateway/internal/recovery"
+	"helix-gateway/internal/server"
+	"helix-gateway/internal/synthetic"
 )
 
 func main() {

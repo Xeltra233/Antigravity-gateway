@@ -1,0 +1,360 @@
+package org.helix.gateway.ui
+
+import android.app.Application
+import android.content.Context
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import org.helix.gateway.R
+import org.helix.gateway.data.AndroidKeystoreCryptoProvider
+import org.helix.gateway.data.ConfigRepository
+import org.helix.gateway.data.GatewayConfig
+import org.helix.gateway.data.GuardSettings
+import org.helix.gateway.data.Provider
+import org.helix.gateway.net.GatewayTestClient
+import org.helix.gateway.service.GatewayServiceController
+import org.helix.gateway.util.NetworkUtils
+import java.io.File
+
+enum class GatewayState {
+    IDLE,
+    STARTING,
+    RUNNING,
+    STOPPING,
+    ERROR
+}
+
+data class UiState(
+    val config: GatewayConfig,
+    val gatewayState: GatewayState = GatewayState.IDLE,
+    val appLink: String = "http://127.0.0.1:38472/v1",
+    val statusMessage: String = "",
+    val testResult: String = "网关未启动",
+    val isTesting: Boolean = false,
+    val lastFetchedModels: List<String> = emptyList(),
+    val keyNeedsRestart: Boolean = false,
+    val guardNeedsRestart: Boolean = false
+)
+
+class MainViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val repository: ConfigRepository by lazy {
+        val file = File(application.filesDir, ConfigRepository.DEFAULT_CONFIG_FILE_NAME)
+        ConfigRepository(file, AndroidKeystoreCryptoProvider())
+    }
+
+    private val _uiState = MutableStateFlow(
+        UiState(
+            config = GatewayConfig(
+                schemaVersion = 1,
+                currentProviderId = "",
+                downstreamKey = "",
+                providers = emptyList()
+            )
+        )
+    )
+    val uiState: StateFlow<UiState> = _uiState.asStateFlow()
+
+    init {
+        loadConfigAndNetwork()
+        observeServiceState()
+    }
+
+    private fun observeServiceState() {
+        viewModelScope.launch {
+            GatewayServiceController.serviceState.collect { state ->
+                val defaultTestText = when (state) {
+                    GatewayState.RUNNING -> if (_uiState.value.testResult == "网关未启动" || _uiState.value.testResult.startsWith("网关正在停止")) "网关运行中，可执行拉取模型或消息测试" else _uiState.value.testResult
+                    GatewayState.IDLE -> "网关未启动"
+                    GatewayState.STARTING -> "正在启动网关..."
+                    GatewayState.STOPPING -> "正在停止网关..."
+                    GatewayState.ERROR -> _uiState.value.testResult
+                }
+                _uiState.value = _uiState.value.copy(
+                    gatewayState = state,
+                    testResult = defaultTestText,
+                    keyNeedsRestart = if (state == GatewayState.RUNNING) _uiState.value.keyNeedsRestart else false,
+                    guardNeedsRestart = if (state == GatewayState.RUNNING) _uiState.value.guardNeedsRestart else false
+                )
+            }
+        }
+        viewModelScope.launch {
+            GatewayServiceController.statusMessage.collect { msg ->
+                if (msg.isNotEmpty()) {
+                    _uiState.value = _uiState.value.copy(statusMessage = msg)
+                }
+            }
+        }
+    }
+
+    fun loadConfigAndNetwork() {
+        viewModelScope.launch(Dispatchers.IO) {
+            // A failure here must never kill the process: surface it in the status area instead.
+            runCatching {
+                val config = repository.load()
+                val ip = NetworkUtils.getLocalIpAddress()
+                val appLink = NetworkUtils.buildAppLink(ip, config.port)
+                _uiState.value = _uiState.value.copy(
+                    config = config,
+                    appLink = appLink
+                )
+            }.onFailure { error ->
+                _uiState.value = _uiState.value.copy(
+                    statusMessage = "读取本地配置失败：${error.message ?: error.javaClass.simpleName}"
+                )
+            }
+            reportPersistenceFailure()
+        }
+    }
+
+    fun updatePort(port: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val updated = repository.updatePort(port)
+            val ip = NetworkUtils.getLocalIpAddress()
+            val appLink = NetworkUtils.buildAppLink(ip, updated.port)
+            _uiState.value = _uiState.value.copy(
+                config = updated,
+                appLink = appLink
+            )
+            reportPersistenceFailure()
+        }
+    }
+
+    fun updateDraft(url: String, key: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val updated = repository.updateCurrentProviderDraft(url, key)
+            _uiState.value = _uiState.value.copy(config = updated)
+            reportPersistenceFailure()
+        }
+    }
+
+    fun selectProvider(providerId: String) {
+        if (_uiState.value.gatewayState == GatewayState.RUNNING || _uiState.value.gatewayState == GatewayState.STARTING) {
+            _uiState.value = _uiState.value.copy(statusMessage = "网关运行中，切换供应商需先停止")
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            val updated = repository.selectProvider(providerId)
+            // Switching is silent on purpose: the selected pill is the only feedback the page gives.
+            _uiState.value = _uiState.value.copy(config = updated)
+        }
+    }
+
+    fun createProvider(name: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val (updated, newProvider) = repository.createProvider(name)
+            _uiState.value = _uiState.value.copy(
+                config = updated,
+                statusMessage = statusOrPersistenceWarning("已创建并切换至: ${newProvider.name}")
+            )
+        }
+    }
+
+    fun renameProvider(providerId: String, newName: String) {
+        val trimmed = newName.trim()
+        if (trimmed.isEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val updated = repository.renameProvider(providerId, trimmed)
+            _uiState.value = _uiState.value.copy(config = updated, statusMessage = statusOrPersistenceWarning("已重命名为: $trimmed"))
+        }
+    }
+
+    /** Detail page save: upstream URL and key for one provider, name handled by renameProvider. */
+    fun updateProviderUpstream(providerId: String, upstreamUrl: String, upstreamKey: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val updated = repository.updateProviderUpstream(providerId, upstreamUrl, upstreamKey)
+            _uiState.value = _uiState.value.copy(
+                config = updated,
+                statusMessage = statusOrPersistenceWarning("已保存供应商配置")
+            )
+        }
+    }
+
+    fun deleteProvider(providerId: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val updated = repository.deleteProvider(providerId)
+            _uiState.value = _uiState.value.copy(config = updated, statusMessage = statusOrPersistenceWarning("已删除供应商"))
+        }
+    }
+    /** Drag finished: persist the new order in one write. */
+    fun reorderProviders(orderedIds: List<String>) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val updated = repository.reorderProviders(orderedIds)
+            _uiState.value = _uiState.value.copy(config = updated)
+        }
+    }
+
+
+    fun regenerateDownstreamKey() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val updated = repository.regenerateDownstreamKey()
+            val isRunning = _uiState.value.gatewayState == GatewayState.RUNNING
+            _uiState.value = _uiState.value.copy(
+                config = updated,
+                keyNeedsRestart = isRunning,
+                statusMessage = statusOrPersistenceWarning(if (isRunning) "下游 Key 已更新（重启网关后生效）" else "已生成新的下游 Key")
+            )
+        }
+    }
+
+    /** Prefers the default status message but replaces it when the last write could not persist. */
+    private fun statusOrPersistenceWarning(default: String): String {
+        val error = repository.lastSaveError ?: return default
+        return persistenceWarning(error)
+    }
+
+    /** Shown when a device-side Keystore/file failure kept a change from being stored. */
+    private fun reportPersistenceFailure() {
+        val error = repository.lastSaveError ?: return
+        _uiState.value = _uiState.value.copy(statusMessage = persistenceWarning(error))
+    }
+
+    private fun persistenceWarning(error: Throwable): String {
+        val reason = error.message?.take(80) ?: error.javaClass.simpleName
+        return "配置未能保存：$reason（改动仅本次运行有效）"
+    }
+
+    fun startGateway(context: Context) {
+        val currentProvider = _uiState.value.config.getCurrentProvider()
+        val url = currentProvider?.upstreamUrl?.trim() ?: ""
+        val key = currentProvider?.upstreamKey?.trim() ?: ""
+        val downstream = _uiState.value.config.downstreamKey
+        val port = _uiState.value.config.port
+
+        if (url.isEmpty()) {
+            _uiState.value = _uiState.value.copy(
+                statusMessage = "请输入 Base URL",
+                testResult = getApplication<Application>().getString(R.string.start_failed_missing_url)
+            )
+            return
+        }
+        if (key.isEmpty()) {
+            _uiState.value = _uiState.value.copy(
+                statusMessage = "请输入 API 密钥",
+                testResult = getApplication<Application>().getString(R.string.start_failed_missing_key)
+            )
+            return
+        }
+
+        if (port !in 1..65535) {
+            _uiState.value = _uiState.value.copy(
+                statusMessage = "端口范围无效 (1-65535)",
+                testResult = "启动失败：端口范围无效 (1-65535)"
+            )
+            return
+        }
+
+        // 启动检查端口：若端口被占用，拦截启动并简明指导修改端口
+        if (!NetworkUtils.isPortAvailable(port)) {
+            _uiState.value = _uiState.value.copy(
+                gatewayState = GatewayState.ERROR,
+                statusMessage = "端口重复，请修改端口",
+                testResult = "启动失败: 端口重复，请修改端口"
+            )
+            return
+        }
+
+        GatewayServiceController.start(
+            context = context,
+            upstreamUrl = url,
+            upstreamKey = key,
+            downstreamKey = downstream,
+            port = port,
+            guard = _uiState.value.config.guard
+        )
+    }
+
+    fun stopGateway(context: Context) {
+        GatewayServiceController.stop(context)
+    }
+
+    fun fetchModels() {
+        if (_uiState.value.gatewayState != GatewayState.RUNNING) {
+            _uiState.value = _uiState.value.copy(statusMessage = "网关尚未运行")
+            return
+        }
+
+        _uiState.value = _uiState.value.copy(isTesting = true, testResult = "正在拉取模型列表...")
+        viewModelScope.launch {
+            val result = GatewayTestClient.fetchModels(
+                downstreamKey = _uiState.value.config.downstreamKey,
+                port = _uiState.value.config.port
+            )
+            if (result.isSuccess) {
+                val models = result.getOrNull() ?: emptyList()
+                val text = if (models.isEmpty()) {
+                    "连接成功，但未返回任何模型 ID"
+                } else {
+                    "✅ 成功获取 ${models.size} 个模型:\n" + models.take(30).joinToString("\n") { "• $it" } +
+                            if (models.size > 30) "\n... (以及其余 ${models.size - 30} 个)" else ""
+                }
+                _uiState.value = _uiState.value.copy(
+                    isTesting = false,
+                    testResult = text,
+                    lastFetchedModels = models
+                )
+            } else {
+                val err = result.exceptionOrNull()?.message ?: "未知错误"
+                _uiState.value = _uiState.value.copy(
+                    isTesting = false,
+                    testResult = "❌ $err"
+                )
+            }
+        }
+    }
+
+    fun testMessage(customModelId: String = "") {
+        if (_uiState.value.gatewayState != GatewayState.RUNNING) {
+            _uiState.value = _uiState.value.copy(statusMessage = "网关尚未运行")
+            return
+        }
+
+        val targetModel = customModelId.trim().ifEmpty {
+            _uiState.value.lastFetchedModels.firstOrNull() ?: "gpt-4o"
+        }
+
+        _uiState.value = _uiState.value.copy(
+            isTesting = true,
+            testResult = "正在向模型「$targetModel」发送测试消息..."
+        )
+
+        viewModelScope.launch {
+            val result = GatewayTestClient.testChatMessage(
+                downstreamKey = _uiState.value.config.downstreamKey,
+                modelId = targetModel,
+                port = _uiState.value.config.port
+            )
+            if (result.isSuccess) {
+                val reply = result.getOrNull() ?: ""
+                _uiState.value = _uiState.value.copy(
+                    isTesting = false,
+                    testResult = "✅ [$targetModel 回复]:\n$reply"
+                )
+            } else {
+                val err = result.exceptionOrNull()?.message ?: "未知错误"
+                _uiState.value = _uiState.value.copy(
+                    isTesting = false,
+                    testResult = "❌ $err"
+                )
+            }
+        }
+    }
+
+    fun updateGuardSettings(guard: GuardSettings) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val updated = repository.updateGuard(guard)
+            val running = _uiState.value.gatewayState == GatewayState.RUNNING ||
+                _uiState.value.gatewayState == GatewayState.STARTING
+            _uiState.value = _uiState.value.copy(config = updated, guardNeedsRestart = running)
+            reportPersistenceFailure()
+        }
+    }
+
+    fun clearStatusMessage() {
+        _uiState.value = _uiState.value.copy(statusMessage = "")
+    }
+}

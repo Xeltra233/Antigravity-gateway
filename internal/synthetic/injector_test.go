@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"antigravity-gateway/internal/config"
+	"helix-gateway/internal/config"
 )
 
 func TestRequestInjectorBasic(t *testing.T) {

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Antigravity Gateway</string>
+    <string name="app_name">Helix Gateway</string>
     <string name="provider_label">当前供应商</string>
     <string name="switch_provider">切换/新建供应商</string>
     <string name="upstream_url_label">OpenAI 兼容 Base URL</string>
@@ -141,4 +141,7 @@
     <string name="row_status_stopping">正在停止</string>
     <string name="row_status_error">启动失败</string>
     <string name="row_status_listen">监听 127.0.0.1:%1$d</string>
+    <string name="gateway_not_running_hint">请先启动网关</string>
+    <string name="start_failed_missing_url">启动失败：请先在供应商页填写 Base URL</string>
+    <string name="start_failed_missing_key">启动失败：请先在供应商页填写 API 密钥</string>
 </resources>

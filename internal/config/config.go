@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"antigravity-gateway/internal/antiroute"
-	"antigravity-gateway/internal/entropy"
+	"helix-gateway/internal/antiroute"
+	"helix-gateway/internal/entropy"
 )
 
 type StaticKeyConfig struct {
@@ -76,10 +76,10 @@ type Config struct {
 	MaxConcurrentRequestsPerKey int
 	RequestQueueTimeout         time.Duration
 
-	StreamSideBufferBytes   int
-	StreamRepairBufferBytes int
-	StreamFlushInterval     time.Duration
-
+	StreamSideBufferBytes int
+	// StreamHeartbeat is the downstream silence interval after which the
+	// gateway emits an SSE keep-alive comment. 0 disables it.
+	StreamHeartbeat time.Duration
 	ShutdownTimeout time.Duration
 	ModelsCacheTTL  time.Duration
 	LogLevel        string
@@ -167,7 +167,7 @@ func Load(getenv func(string) string) (*Config, error) {
 	// Key HMAC Secret (Optional, fallback to default secret if not set)
 	cfg.KeyHMACSecret = strings.TrimSpace(getenv("KEY_HMAC_SECRET"))
 	if cfg.KeyHMACSecret == "" {
-		cfg.KeyHMACSecret = "antigravity-gateway-default-hmac-secret-2025"
+		cfg.KeyHMACSecret = "helix-gateway-default-hmac-secret-2025"
 	} else if len(cfg.KeyHMACSecret) < 16 {
 		return nil, errors.New("KEY_HMAC_SECRET must be at least 16 characters")
 	}
@@ -293,7 +293,7 @@ func Load(getenv func(string) string) (*Config, error) {
 	}
 	cfg.ModelReportKey = strings.TrimSpace(getenv("MODEL_REPORT_KEY"))
 	if cfg.ModelReportKey == "" {
-		cfg.ModelReportKey = "antigravity_model"
+		cfg.ModelReportKey = "helix_model"
 	}
 
 	// Wrapper Mode
@@ -329,8 +329,7 @@ func Load(getenv func(string) string) (*Config, error) {
 	cfg.RequestQueueTimeout = getDurationMS(getenv("REQUEST_QUEUE_TIMEOUT_MS"), 50, 0, 10000)
 
 	cfg.StreamSideBufferBytes = getInt(getenv("STREAM_SIDE_BUFFER_BYTES"), 0, 0, 10485760)
-	cfg.StreamRepairBufferBytes = getInt(getenv("STREAM_REPAIR_BUFFER_BYTES"), 1048576, 1024, 10485760)
-	cfg.StreamFlushInterval = getDurationMS(getenv("STREAM_FLUSH_INTERVAL_MS"), 0, 0, 10)
+	cfg.StreamHeartbeat = getDurationMS(getenv("STREAM_HEARTBEAT_MS"), 15000, 0, 300000)
 
 	cfg.ShutdownTimeout = getDurationMS(getenv("SHUTDOWN_TIMEOUT_MS"), 30000, 1000, 300000)
 	cfg.ModelsCacheTTL = getDurationMS(getenv("MODELS_CACHE_TTL_MS"), 30000, 0, 86400000)

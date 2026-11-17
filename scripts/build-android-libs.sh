@@ -45,8 +45,8 @@ build_one() {
     go build -tags "android cgo_jni" -trimpath \
       -ldflags "-s -w -checklinkname=0" \
       -buildmode=c-shared \
-      -o "$LIBS/$abi/libantigravity.so" ./cmd/androidbridge ) || return 1
-  ls -l "$LIBS/$abi/libantigravity.so"
+      -o "$LIBS/$abi/libhelix.so" ./cmd/androidbridge ) || return 1
+  ls -l "$LIBS/$abi/libhelix.so"
 }
 
 declare -A GOARCH_FOR=(

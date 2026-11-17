@@ -12,17 +12,17 @@ import (
 	"sync"
 	"time"
 
-	"antigravity-gateway/internal/config"
-	"antigravity-gateway/internal/keymgmt"
-	"antigravity-gateway/internal/logger"
-	"antigravity-gateway/internal/metrics"
-	"antigravity-gateway/internal/proxy"
-	"antigravity-gateway/internal/recovery"
-	"antigravity-gateway/internal/server"
+	"helix-gateway/internal/config"
+	"helix-gateway/internal/keymgmt"
+	"helix-gateway/internal/logger"
+	"helix-gateway/internal/metrics"
+	"helix-gateway/internal/proxy"
+	"helix-gateway/internal/recovery"
+	"helix-gateway/internal/server"
 )
 
 var (
-	Version   = "1.0.21"
+	Version   = "2.0.0"
 	GitCommit = "none"
 	BuildTime = "unknown"
 )
@@ -143,7 +143,7 @@ func StartEngine(getenv func(string) string) (*Engine, error) {
 	}
 
 	logger.Init(cfg.LogLevel, os.Stdout)
-	slog.Info("starting antigravity-gateway engine",
+	slog.Info("starting helix-gateway engine",
 		"version", Version,
 		"git_commit", GitCommit,
 		"build_time", BuildTime,

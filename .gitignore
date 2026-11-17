@@ -23,6 +23,11 @@ api.txt
 .env
 test_out.txt
 
+# Local private workspace (logs, tmp, assets, secrets) — never commit
+/local/
+# Local build output (run.bat falls back to bin/gateway.exe)
+/bin/
+
 # Goal artifacts & temporary test files
 goal-*
 AGENTS.md

@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"antigravity-gateway/internal/server"
+	"helix-gateway/internal/server"
 )
 
 type AdminHandler struct {

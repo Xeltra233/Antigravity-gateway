@@ -29,16 +29,16 @@ plugins {
 }
 
 android {
-    namespace = "org.antigravity.gateway"
+    namespace = "org.helix.gateway"
     compileSdk = 34
     ndkVersion = "26.3.11579264"
 
     defaultConfig {
-        applicationId = "org.antigravity.gateway"
+        applicationId = "org.helix.gateway"
         minSdk = 26
         targetSdk = 34
-        versionCode = 19
-        versionName = "1.0.21"
+        versionCode = 20
+        versionName = "2.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -78,7 +78,7 @@ android {
         val variant = this
         variant.outputs.all {
             val output = this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl
-            output?.outputFileName = "antigravity-gateway-v${variant.versionName}.apk"
+            output?.outputFileName = "helix-gateway-v${variant.versionName}.apk"
         }
     }
     compileOptions {

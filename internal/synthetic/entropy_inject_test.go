@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"antigravity-gateway/internal/config"
-	"antigravity-gateway/internal/entropy"
+	"helix-gateway/internal/config"
+	"helix-gateway/internal/entropy"
 )
 
 var toolNamePattern = regexp.MustCompile(`^[A-Za-z0-9_-]{1,64}$`)

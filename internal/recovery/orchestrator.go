@@ -12,16 +12,16 @@ import (
 	"strings"
 	"time"
 
-	"antigravity-gateway/internal/antiroute"
-	"antigravity-gateway/internal/config"
-	"antigravity-gateway/internal/keymgmt"
-	"antigravity-gateway/internal/limiter"
-	"antigravity-gateway/internal/limits"
-	"antigravity-gateway/internal/metrics"
-	"antigravity-gateway/internal/modelid"
-	"antigravity-gateway/internal/proxy"
-	"antigravity-gateway/internal/server"
-	"antigravity-gateway/internal/synthetic"
+	"helix-gateway/internal/antiroute"
+	"helix-gateway/internal/config"
+	"helix-gateway/internal/keymgmt"
+	"helix-gateway/internal/limiter"
+	"helix-gateway/internal/limits"
+	"helix-gateway/internal/metrics"
+	"helix-gateway/internal/modelid"
+	"helix-gateway/internal/proxy"
+	"helix-gateway/internal/server"
+	"helix-gateway/internal/synthetic"
 )
 
 type Orchestrator struct {
@@ -218,14 +218,20 @@ func (o *Orchestrator) handleNonStreaming(w http.ResponseWriter, ctx context.Con
 			}
 		}
 
-		upstreamReq, err := o.client.NewUpstreamRequest(ctx, http.MethodPost, o.cfg.UpstreamChatURL(), bytes.NewReader(injected.TransformedBody), currentReqID)
+		// Each attempt carries its own deadline. The upstream client has no
+		// global timeout, so the body read has to be bounded here.
+		attemptCtx, attemptCancel := context.WithTimeout(ctx, o.cfg.UpstreamTimeout)
+
+		upstreamReq, err := o.client.NewUpstreamRequest(attemptCtx, http.MethodPost, o.cfg.UpstreamChatURL(), bytes.NewReader(injected.TransformedBody), currentReqID)
 		if err != nil {
+			attemptCancel()
 			server.WriteError(w, http.StatusInternalServerError, "Failed to create upstream request", "api_error", "internal_error")
 			return
 		}
 
 		resp, err := o.client.Do(upstreamReq)
 		if err != nil {
+			attemptCancel()
 			if ctx.Err() != nil {
 				return
 			}
@@ -235,6 +241,7 @@ func (o *Orchestrator) handleNonStreaming(w http.ResponseWriter, ctx context.Con
 
 		respBody, err := limits.ReadAll(resp.Body, o.cfg.MaxResponseBytes)
 		resp.Body.Close()
+		attemptCancel()
 		if errors.Is(err, limits.ErrExceeded) {
 			server.WriteError(w, http.StatusBadGateway, "Upstream response exceeded configured size limit", "api_error", "upstream_response_too_large")
 			return
@@ -367,7 +374,11 @@ func (o *Orchestrator) attemptSingleFormatRetry(ctx context.Context, originalBod
 		retryBody = guardedRetry
 	}
 
-	retryReq, err := o.client.NewUpstreamRequest(ctx, http.MethodPost, o.cfg.UpstreamChatURL(), bytes.NewReader(retryBody), reqID+"_format_retry")
+	// The format retry is a whole second request; bound it the same way.
+	retryCtx, retryCancel := context.WithTimeout(ctx, o.cfg.UpstreamTimeout)
+	defer retryCancel()
+
+	retryReq, err := o.client.NewUpstreamRequest(retryCtx, http.MethodPost, o.cfg.UpstreamChatURL(), bytes.NewReader(retryBody), reqID+"_format_retry")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -449,7 +460,34 @@ func (o *Orchestrator) handleStreaming(w http.ResponseWriter, ctx context.Contex
 	// upstreams announce their model in the first chunk, and an immediate
 	// failure can still be reported as a normal error status.
 	limitedBody := limits.NewReader(resp.Body, o.cfg.MaxResponseBytes)
-	head, peekErr := peekStream(limitedBody)
+
+	// The first event is bounded by its own deadline. A thinking model may stay
+	// silent for minutes before the first token, and the request has to fail as
+	// a normal error status during that window rather than hang forever.
+	type peekResult struct {
+		head []byte
+		err  error
+	}
+	peekCh := make(chan peekResult, 1)
+	go func() {
+		head, err := peekStream(limitedBody)
+		peekCh <- peekResult{head: head, err: err}
+	}()
+
+	var head []byte
+	var peekErr error
+	select {
+	case r := <-peekCh:
+		head, peekErr = r.head, r.err
+	case <-time.After(o.cfg.UpstreamTimeout):
+		if ctx.Err() == nil {
+			server.WriteError(w, http.StatusGatewayTimeout, "Upstream produced no data within the first-byte timeout", "api_error", "upstream_timeout")
+		}
+		return
+	case <-ctx.Done():
+		return
+	}
+
 	if model := modelid.ModelFromStream(head); model != "" {
 		ex.info = ex.info.WithModel(model, modelid.SourceStream)
 	} else {
@@ -461,6 +499,14 @@ func (o *Orchestrator) handleStreaming(w http.ResponseWriter, ctx context.Contex
 		}
 		return
 	}
+	// Nothing above caps the total request time any more, so a stalled upstream
+	// has to be bounded by read activity instead: if no bytes arrive for a full
+	// timeout window, the body is closed and the read fails.
+	idleTimer := time.AfterFunc(o.cfg.UpstreamTimeout, func() {
+		_ = resp.Body.Close()
+	})
+	defer idleTimer.Stop()
+
 	var streamBody io.Reader = limitedBody
 	if len(head) > 0 {
 		streamBody = io.MultiReader(bytes.NewReader(head), limitedBody)
@@ -486,17 +532,28 @@ func (o *Orchestrator) handleStreaming(w http.ResponseWriter, ctx context.Contex
 			streamReader = rw
 		}
 	}
+	streamReader = &activityReader{r: streamReader, timer: idleTimer, after: o.cfg.UpstreamTimeout}
 	if injected.SyntheticToolName == "" {
 		// Passthrough mode with immediate chunk-by-chunk flushing. The [DONE]
 		// event is the SSE application-level terminator; do not wait for an HTTP
 		// connection close because upstreams commonly keep connections alive.
+		//
+		// A keep-alive writer keeps the downstream from going silent while the
+		// upstream is still working, which is what long tool-call arguments and
+		// thinking phases look like from the client side.
+		hb := synthetic.NewHeartbeatWriter(w, flusher, o.cfg.StreamHeartbeat)
+		var sink io.Writer = w
+		if hb != nil {
+			sink = hb
+			defer hb.Close()
+		}
 		buf := make([]byte, 4096)
 		doneMarker := []byte("data: [DONE]")
 		var tail []byte
 		for {
 			n, err := streamReader.Read(buf)
 			if n > 0 {
-				if _, werr := w.Write(buf[:n]); werr != nil {
+				if _, werr := sink.Write(buf[:n]); werr != nil {
 					return
 				}
 				if flusher != nil {
@@ -538,6 +595,16 @@ func (o *Orchestrator) handleStreaming(w http.ResponseWriter, ctx context.Contex
 		if stats.ContentConflict {
 			metrics.Default.SyntheticConflicts.Add(1)
 		}
+		if stats.Heartbeats > 0 {
+			slog.Debug("stream keep-alive sent", "request_id", reqID, "count", stats.Heartbeats)
+		}
+		if stats.UpstreamError {
+			slog.Warn("upstream reported an error mid-stream", "request_id", reqID)
+		}
+		if !stats.SawDone && !stats.SawFinish {
+			slog.Warn("upstream stream ended without a terminator", "request_id", reqID,
+				"bytes", stats.BytesWritten, "comments_forwarded", stats.CommentsForwarded)
+		}
 	}
 }
 
@@ -571,4 +638,20 @@ func isResponseEmpty(respBody []byte) bool {
 		}
 	}
 	return true
+}
+
+// activityReader restarts the upstream idle deadline every time bytes arrive, so
+// a stream that keeps producing is never cut off no matter how long it runs.
+type activityReader struct {
+	r     io.Reader
+	timer *time.Timer
+	after time.Duration
+}
+
+func (a *activityReader) Read(p []byte) (int, error) {
+	n, err := a.r.Read(p)
+	if n > 0 && a.timer != nil {
+		a.timer.Reset(a.after)
+	}
+	return n, err
 }

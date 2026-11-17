@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"antigravity-gateway/internal/config"
+	"helix-gateway/internal/config"
 )
 
 func TestServerStartAndShutdown(t *testing.T) {

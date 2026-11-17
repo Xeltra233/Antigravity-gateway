@@ -19,5 +19,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "AntigravityGateway"
+rootProject.name = "HelixGateway"
 include(":app")

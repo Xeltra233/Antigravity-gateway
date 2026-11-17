@@ -1,4 +1,4 @@
-module antigravity-gateway
+module helix-gateway
 
 go 1.25.0
 

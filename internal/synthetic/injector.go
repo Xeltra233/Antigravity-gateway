@@ -7,8 +7,8 @@ import (
 	"math"
 	"sync/atomic"
 
-	"antigravity-gateway/internal/config"
-	"antigravity-gateway/internal/entropy"
+	"helix-gateway/internal/config"
+	"helix-gateway/internal/entropy"
 )
 
 type InjectedRequest struct {

@@ -1,9 +1,9 @@
-# Antigravity Gateway
+# Helix Gateway
 
 **面向 OpenAI Chat Completions 协议的防截断兼容网关** —— Go 原生核心，可独立部署为服务端，也可通过 JNI 内嵌为 Android 本地代理。
 
-[![Release](https://img.shields.io/github/v/release/Xeltra233/Antigravity-gateway?label=release)](https://github.com/Xeltra233/Antigravity-gateway/releases/latest)
-[![Build & Release](https://github.com/Xeltra233/Antigravity-gateway/actions/workflows/release.yml/badge.svg)](https://github.com/Xeltra233/Antigravity-gateway/actions/workflows/release.yml)
+[![Release](https://img.shields.io/github/v/release/Xeltra233/Helix-gateway?label=release)](https://github.com/Xeltra233/Helix-gateway/releases/latest)
+[![Build & Release](https://github.com/Xeltra233/Helix-gateway/actions/workflows/release.yml/badge.svg)](https://github.com/Xeltra233/Helix-gateway/actions/workflows/release.yml)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](#-license)
 
 <p align="center">
@@ -58,9 +58,9 @@
 
 ### 📖 项目简介
 
-**Antigravity Gateway for Android**（包名 `org.antigravity.gateway`）是专为 Android 平台定制的极简本地 OpenAI Chat Completions 防截断代理网关。
+**Helix Gateway for Android**（包名 `org.helix.gateway`）是专为 Android 平台定制的极简本地 OpenAI Chat Completions 防截断代理网关。
 
-移动端通过 JNI 内嵌编译好的 Go 原生核心动态库（`libantigravity.so`），无需依赖任何云端中转或外部服务器，直接在 Android 手机/平板/车机/模拟器本地启动防截断网关，彻底解决 **SillyTavern 酒馆、Cherry Studio、NextChat** 等客户端在移动设备上游玩时的回答截断、Gemini/CPA 轮次 400 报错及未闭合 Markdown/JSON 代码块问题。
+移动端通过 JNI 内嵌编译好的 Go 原生核心动态库（`libhelix.so`），无需依赖任何云端中转或外部服务器，直接在 Android 手机/平板/车机/模拟器本地启动防截断网关，彻底解决 **SillyTavern 酒馆、Cherry Studio、NextChat** 等客户端在移动设备上游玩时的回答截断、Gemini/CPA 轮次 400 报错及未闭合 Markdown/JSON 代码块问题。
 
 ---
 
@@ -68,7 +68,7 @@
 
 #### 场景 A：Android 用户（推荐普通用户）
 
-1. 打开 [Releases](https://github.com/Xeltra233/Antigravity-gateway/releases/latest)，下载 `antigravity-gateway-v<版本>.apk`（当前为 `v1.0.21`）。
+1. 打开 [Releases](https://github.com/Xeltra233/Helix-gateway/releases/latest)，下载 `helix-gateway-v<版本>.apk`（当前为 `v2.0.0`）。
 2. 在手机上安装 APK（首次安装需允许「安装未知来源应用」）。
 3. 打开应用 → 点击「切换/新建」填写上游供应商：
    - **上游地址**：如 `https://api.openai.com/v1`（或任何兼容 Chat Completions 的服务）
@@ -83,7 +83,7 @@
 
 ```bash
 # 1. 获取二进制（Release 页面按平台下载），或从源码编译
-go build -o antigravity-gateway ./cmd/gateway
+go build -o helix-gateway ./cmd/gateway
 
 # 2. 配置最小可用环境变量
 export UPSTREAM_BASE_URL="https://api.openai.com/v1"
@@ -91,7 +91,7 @@ export UPSTREAM_API_KEY="<你的上游 Key>"
 export GATEWAY_API_KEY="sk-agw-local"      # 下游客户端填写这个
 
 # 3. 启动
-./antigravity-gateway --port 38472
+./helix-gateway --port 38472
 
 # 4. 验证
 curl http://127.0.0.1:38472/healthz
@@ -138,9 +138,9 @@ curl http://127.0.0.1:38472/v1/models -H "Authorization: Bearer sk-agw-local"
 | 维度 | 支持范围 | 说明 |
 | --- | --- | --- |
 | Android 版本 | **8.0 (API 26) ~ 15** | `minSdk 26`、`targetSdk 34`，已验证 API 28 真机级模拟器与 API 34 编译链 |
-| CPU 架构 | `arm64-v8a` / `x86_64` / `armeabi-v7a` / `x86` | APK 内置全部 4 种 ABI 的 `libantigravity.so`，模拟器与真机通用 |
+| CPU 架构 | `arm64-v8a` / `x86_64` / `armeabi-v7a` / `x86` | APK 内置全部 4 种 ABI 的 `libhelix.so`，模拟器与真机通用 |
 | 界面主题 | 浅色 / 深色 / 跟随系统 | 右上角开关一键切换，深色模式为独立配色（非简单反色） |
-| 崩溃日志目录 | 应用私有目录 + `Android/data/<包名>/files/crash-logs`（≤ Android 10 可浏览） + `下载/AntigravityGateway/`（Android 11+） | 详见 [崩溃诊断与安全模式](#-崩溃诊断与安全模式) |
+| 崩溃日志目录 | 应用私有目录 + `Android/data/<包名>/files/crash-logs`（≤ Android 10 可浏览） + `下载/HelixGateway/`（Android 11+） | 详见 [崩溃诊断与安全模式](#-崩溃诊断与安全模式) |
 | 服务端二进制 | Linux（amd64/arm64）、Windows（amd64）、macOS（amd64/arm64） | Release 页面按平台发布，版本号与 APK 同步 |
 | 上游协议 | OpenAI Chat Completions（`/v1/models`、`/v1/chat/completions`） | 兼容 OpenAI、DeepSeek、Gemini 兼容层、CPA、各类中转 |
 | 下游客户端 | SillyTavern、Cherry Studio、NextChat、OpenAI SDK | 只需自定义 Base URL + Bearer Key |
@@ -177,9 +177,9 @@ curl http://127.0.0.1:38472/v1/models -H "Authorization: Bearer sk-agw-local"
 
 | 位置 | 路径 | 适用场景 |
 | --- | --- | --- |
-| 应用私有目录 | `/data/data/org.antigravity.gateway/files/crash-logs/` | 应用内「查看崩溃日志」读取；需 root/`run-as` 才能在电脑上直接取 |
-| 应用外部目录 | `/sdcard/Android/data/org.antigravity.gateway/files/crash-logs/` | **Android 10 及以下**：文件管理器 / USB / `adb pull` 直接可读 |
-| 公共下载目录 | `/sdcard/Download/AntigravityGateway/` | **Android 11 及以上**：系统文件管理器、微信、QQ 都能直接打开（通过 MediaStore 写入，无需存储权限） |
+| 应用私有目录 | `/data/data/org.helix.gateway/files/crash-logs/` | 应用内「查看崩溃日志」读取；需 root/`run-as` 才能在电脑上直接取 |
+| 应用外部目录 | `/sdcard/Android/data/org.helix.gateway/files/crash-logs/` | **Android 10 及以下**：文件管理器 / USB / `adb pull` 直接可读 |
+| 公共下载目录 | `/sdcard/Download/HelixGateway/` | **Android 11 及以上**：系统文件管理器、微信、QQ 都能直接打开（通过 MediaStore 写入，无需存储权限） |
 
 报告内容包含时间、应用版本、设备型号、Android 版本、ABI、线程名与完整堆栈；每个位置最多保留最新 5 份，自动清理旧文件。
 
@@ -209,10 +209,10 @@ curl http://127.0.0.1:38472/v1/models -H "Authorization: Bearer sk-agw-local"
 adb logcat -s CrashReporter:I AndroidRuntime:E
 
 # 拉取公共下载目录中的报告（Android 11+ 同样可用）
-adb pull /sdcard/Download/AntigravityGateway/ ./crash-logs/
+adb pull /sdcard/Download/HelixGateway/ ./crash-logs/
 
 # Android 10 及以下还可以拉取应用外部目录
-adb pull /sdcard/Android/data/org.antigravity.gateway/files/crash-logs/ ./crash-logs/
+adb pull /sdcard/Android/data/org.helix.gateway/files/crash-logs/ ./crash-logs/
 ```
 
 ---
@@ -233,12 +233,12 @@ adb pull /sdcard/Android/data/org.antigravity.gateway/files/crash-logs/ ./crash-
 │  └───────────────────────┘              │              │
 │                                         │              │
 │  ┌──────────────────────────────────────▼───────────┐  │
-│  │ JNI Bridge (org.antigravity.gateway.bridge)      │  │
+│  │ JNI Bridge (org.helix.gateway.bridge)      │  │
 │  └──────────────────────┬───────────────────────────┘  │
 └─────────────────────────┼──────────────────────────────┘
                           │ CGO / JNI
 ┌─────────────────────────▼──────────────────────────────┐
-│  Go Native Core (libantigravity.so)                    │
+│  Go Native Core (libhelix.so)                    │
 │  • Synthetic Transport Tool Engine                     │
 │  • Incremental SSE State Machine                       │
 │  • Chat Turn Sanitizer & Bounded Repair                │
@@ -272,7 +272,7 @@ cd android
 ./gradlew :app:assembleRelease
 
 # 产物输出路径:
-# android/app/build/outputs/apk/release/antigravity-gateway-v1.0.21.apk
+# android/app/build/outputs/apk/release/helix-gateway-v2.0.0.apk
 ```
 
 ---
@@ -293,8 +293,8 @@ cd android
 
 ##### 2. 获取源码
 ```bash
-git clone https://github.com/Xeltra233/Antigravity-gateway.git
-cd Antigravity-gateway
+git clone https://github.com/Xeltra233/Helix-gateway.git
+cd Helix-gateway
 ```
 
 ##### 3. 执行编译命令
@@ -312,7 +312,7 @@ cd Antigravity-gateway
 - **查看版本信息**:
   ```bash
   ./gateway -v
-  # 输出: Antigravity Gateway version 1.0.21 (commit: ..., built: ...)
+  # 输出: Helix Gateway version 2.0.0 (commit: ..., built: ...)
   ```
 
 - **跨平台交叉编译 (在一台机器上为其他系统编译)**:
@@ -369,7 +369,7 @@ cd Antigravity-gateway
 | `ANTI_ROUTE_SEPARATOR` | 否 | `hyphen` | 拆词分隔符：`hyphen`（`-`）或 `wordjoiner`（U+2060） |
 | `ANTI_ROUTE_RULES_FILE` | 否 | 空 | 追加规则文件路径（JSON：`split_terms` / `scrub` / `replace`） |
 | `MODEL_REPORT` | 否 | `headers` | 模型识别结果回传方式：`off`、`headers`、`body`、`both` |
-| `MODEL_REPORT_KEY` | 否 | `antigravity_model` | `body` 回传时使用的字段名 |
+| `MODEL_REPORT_KEY` | 否 | `helix_model` | `body` 回传时使用的字段名 |
 | `TEXT_MODEL_PATTERN` | 否 | - | 可选正则：自定义判定为文本对话模型并启用防截断保护的匹配规则 |
 | `NON_TEXT_MODEL_PATTERN` | 否 | - | 可选正则：自定义判定为生图/语音/嵌入模型并跳过合成包装直接透传的匹配规则 |
 | `MAX_REQUEST_BYTES` | 否 | `16777216` | 最大允许请求大小（字节，默认 16MB） |
@@ -378,8 +378,7 @@ cd Antigravity-gateway
 | `MAX_CONCURRENT_REQUESTS_PER_KEY` | 否 | `64` | 单个下游 API Key 最大并发请求数 |
 | `REQUEST_QUEUE_TIMEOUT_MS`| 否 | `50` | 高并发下请求排队最大等待超时（毫秒） |
 | `STREAM_SIDE_BUFFER_BYTES`| 否 | `0` | 流式 Side Buffer 大小（默认 `0` 即极速直发，零额外延迟） |
-| `STREAM_REPAIR_BUFFER_BYTES`| 否 | `1048576` | 流式格式修复缓冲区大小（默认 1MB） |
-| `STREAM_FLUSH_INTERVAL_MS`| 否 | `0` | 流式输出刷新间隔（毫秒，默认 0 即刻刷新） |
+| `STREAM_HEARTBEAT_MS` | 否 | `15000` | 下游静默保活间隔（毫秒），超时无数据时补发 SSE 注释帧，`0` 关闭 |
 | `ADMIN_API_KEY` | 否 | `admin-secret-key-12345` | 多 Key 动态管理接口鉴权 Key（用于 `/admin/keys`，自定义时至少 8 字符） |
 | `KEY_HMAC_SECRET` | 否 | 内置默认密钥 | 下游 Key 的 HMAC-SHA256 安全签名密钥（自定义时至少 16 字符） |
 | `KEY_DB_PATH` | 否 | `./data/keys.sqlite` | 动态 Key 持久化存储 SQLite 数据库路径 |
@@ -399,7 +398,7 @@ UPSTREAM_BASE_URL=https://api.openai.com
 UPSTREAM_API_KEY=sk-your-upstream-key-here
 
 # [推荐] 下游客户端连接网关所使用的简易访问 Key (酒馆/客户端填写此 Key)
-API_KEY=sk-antigravity-123456
+API_KEY=sk-helix-123456
 PORT=8080
 HOST=0.0.0.0
 
@@ -452,7 +451,7 @@ LOG_LEVEL=info
 | 回传方式 | 内容 |
 | :--- | :--- |
 | `headers`（默认） | `X-AGW-Model`、`X-AGW-Model-Family`、`X-AGW-Model-Version`、`X-AGW-Model-Capabilities`、`X-AGW-Model-Source`、`X-AGW-Route` |
-| `body` | 响应 JSON 中追加 `antigravity_model` 对象（`model` / `family` / `version` / `capabilities` / `source` / `route` / `requested`），字段名可由 `MODEL_REPORT_KEY` 调整 |
+| `body` | 响应 JSON 中追加 `helix_model` 对象（`model` / `family` / `version` / `capabilities` / `source` / `route` / `requested`），字段名可由 `MODEL_REPORT_KEY` 调整 |
 | `both` | 同时输出上述两者 |
 
 `source` 说明识别来源：`request`（请求字段）、`response-body`（响应体）、`response-header`（响应头）、`response-stream`（流式首个事件）、`fallback`（上游未回传时的兜底）。流式请求会在提交响应头之前预读首个事件完成识别，随后原样回放，不改变流式时序。
@@ -481,30 +480,30 @@ nano .env
 ```bash
 export UPSTREAM_BASE_URL="https://your-upstream-domain.com"
 export UPSTREAM_API_KEY="sk-your-upstream-key"
-export API_KEY="sk-antigravity-123456"
+export API_KEY="sk-helix-123456"
 export PORT="8080"
 
 ./gateway
 ```
 
 #### 方式 3：Linux Systemd 守护进程部署
-创建 systemd 服务文件 `/etc/systemd/system/antigravity-gateway.service`：
+创建 systemd 服务文件 `/etc/systemd/system/helix-gateway.service`：
 ```ini
 [Unit]
-Description=Antigravity Gateway Service
+Description=Helix Gateway Service
 After=network.target
 
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/opt/antigravity-gateway
-ExecStart=/opt/antigravity-gateway/gateway
+WorkingDirectory=/opt/helix-gateway
+ExecStart=/opt/helix-gateway/gateway
 Restart=always
 RestartSec=5
 # 既可使用 Environment 指定，也可直接在 WorkingDirectory 下放置 .env 文件
 Environment=UPSTREAM_BASE_URL=https://your-upstream-domain.com
 Environment=UPSTREAM_API_KEY=sk-your-upstream-key
-Environment=API_KEY=sk-antigravity-123456
+Environment=API_KEY=sk-helix-123456
 Environment=PORT=8080
 Environment=HOST=0.0.0.0
 
@@ -514,21 +513,21 @@ WantedBy=multi-user.target
 启动并开机自启：
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now antigravity-gateway
-sudo systemctl status antigravity-gateway
+sudo systemctl enable --now helix-gateway
+sudo systemctl status helix-gateway
 ```
 
 #### 方式 4：Docker / Docker Compose 部署
 使用 `docker run` 快速启动：
 ```bash
 docker run -d \
-  --name antigravity-gateway \
+  --name helix-gateway \
   -p 8080:8080 \
   -e UPSTREAM_BASE_URL="https://your-upstream-domain.com" \
   -e UPSTREAM_API_KEY="sk-your-upstream-key" \
-  -e API_KEY="sk-antigravity-123456" \
+  -e API_KEY="sk-helix-123456" \
   --restart unless-stopped \
-  antigravity-gateway:latest
+  helix-gateway:latest
 ```
 
 或使用 `docker-compose.yml`：
@@ -538,13 +537,13 @@ version: '3.8'
 services:
   gateway:
     build: .
-    container_name: antigravity-gateway
+    container_name: helix-gateway
     ports:
       - "8080:8080"
     environment:
       - UPSTREAM_BASE_URL=https://your-upstream-domain.com
       - UPSTREAM_API_KEY=sk-your-upstream-key
-      - API_KEY=sk-antigravity-123456
+      - API_KEY=sk-helix-123456
       - PORT=8080
     restart: unless-stopped
 ```
@@ -609,17 +608,17 @@ curl -X POST http://127.0.0.1:8080/admin/keys/key_7f8a91b2c3d4/revoke \
 #### 3. Cherry Studio / NextChat / Chatbox 设置
 - **提供商类型**: OpenAI / OpenAI 兼容
 - **API 地址**: `http://127.0.0.1:8080/v1`
-- **API Key**: `sk-antigravity-123456`
+- **API Key**: `sk-helix-123456`
 
 #### 4. cURL 快速测试验证
 - **测试模型列表获取**:
   ```bash
-  curl -s -H "Authorization: Bearer sk-antigravity-123456" http://127.0.0.1:8080/v1/models
+  curl -s -H "Authorization: Bearer sk-helix-123456" http://127.0.0.1:8080/v1/models
   ```
 - **测试对话流式输出 (SSE)**:
   ```bash
   curl http://127.0.0.1:8080/v1/chat/completions \
-    -H "Authorization: Bearer sk-antigravity-123456" \
+    -H "Authorization: Bearer sk-helix-123456" \
     -H "Content-Type: application/json" \
     -d '{
       "model": "gemini-3.5-flash-low",
@@ -632,8 +631,8 @@ curl -X POST http://127.0.0.1:8080/admin/keys/key_7f8a91b2c3d4/revoke \
 
 ### 🛡️ 运维监控与健康检查
 
-- **存活探针 (Liveness)**: `GET /healthz` → 返回 `{"status":"ok","version":"1.0.21"}` (200 OK)
-- **就绪探针 (Readiness)**: `GET /readyz` → 返回 `{"status":"ready","version":"1.0.21"}` (200 OK)
+- **存活探针 (Liveness)**: `GET /healthz` → 返回 `{"status":"ok","version":"2.0.0"}` (200 OK)
+- **就绪探针 (Readiness)**: `GET /readyz` → 返回 `{"status":"ready","version":"2.0.0"}` (200 OK)
 - **Prometheus 监控指标**: `GET /metrics` → 输出请求总量、活跃请求数、过载拒绝、合成包装命中/修复/重试/冲突等指标。
 - **紧急回滚**: 若遇到突发未知上游格式异常，修改 `.env` 中的 `WRAPPER_MODE=off` 并重启网关，即可切换为原生纯透传模式。
 
@@ -642,15 +641,15 @@ curl -X POST http://127.0.0.1:8080/admin/keys/key_7f8a91b2c3d4/revoke \
 ### 🗂️ 项目结构
 
 ```text
-Antigravity-gateway/
+Helix-gateway/
 ├── cmd/
 │   ├── gateway/          # 服务端入口（CLI，多平台二进制）
-│   ├── androidbridge/    # JNI 桥接层（编译为 libantigravity.so）
+│   ├── androidbridge/    # JNI 桥接层（编译为 libhelix.so）
 │   └── live_test/        # 端到端联调客户端
 ├── internal/             # 防截断核心：请求改写、流式拼接、重试与熔断
 ├── pkg/                  # 可复用库：上游适配、日志、配置加载
 ├── android/              # Android 工程（Kotlin + Gradle）
-│   └── app/src/main/java/org/antigravity/gateway/
+│   └── app/src/main/java/org/helix/gateway/
 │       ├── GatewayApplication.kt   # 启动流程（主题、崩溃采集、安全模式）
 │       ├── bridge/                 # JNI 调用封装（Go 核心）
 │       ├── data/                   # 配置模型、Keystore 加密、主题偏好
@@ -665,7 +664,7 @@ Antigravity-gateway/
 ### 📦 版本与发布流程
 
 - **版本号**同时写入 4 处并保持一致：`android/app/build.gradle.kts`（`versionCode`/`versionName`）、`cmd/gateway/main.go`、`internal/*/engine.go`、本 README。
-- 推送形如 `v1.0.21` 的 **标签** 即触发 `.github/workflows/release.yml`：
+- 推送形如 `v2.0.0` 的 **标签** 即触发 `.github/workflows/release.yml`：
   1. 编译 Android APK（debug/release 双构建 + 单元测试 + lint）；
   2. 交叉编译 6 个服务端二进制（Linux/Windows/macOS × amd64/arm64）；
   3. 通过 `ldflags -X main.Version=<tag>` 把版本号与 commit SHA 注入二进制；
@@ -673,10 +672,10 @@ Antigravity-gateway/
 - **校验发布产物**：
 
 ```bash
-gh release view v1.0.21                                   # 资产列表
+gh release view v2.0.0                                   # 资产列表
 sha256sum -c checksums.txt                                # 校验下载文件
-antigravity-gateway --version                             # v1.0.21 (commit: ...)
-aapt2 dump badging antigravity-gateway-v1.0.21.apk | head -1   # APK 版本
+helix-gateway --version                             # v2.0.0 (commit: ...)
+aapt2 dump badging helix-gateway-v2.0.0.apk | head -1   # APK 版本
 ```
 
 - **升级约定**：已发布版本不再修改；每个变更批次递增补丁号并重新走完整验证（单元测试 → 真机/模拟器用例 → 发布校验）。
@@ -710,9 +709,9 @@ aapt2 dump badging antigravity-gateway-v1.0.21.apk | head -1   # APK 版本
 
 ### Overview
 
-**Antigravity Gateway for Android** (`org.antigravity.gateway`) is a standalone, lightweight Android application delivering an embedded OpenAI Chat Completions anti-truncation proxy gateway.
+**Helix Gateway for Android** (`org.helix.gateway`) is a standalone, lightweight Android application delivering an embedded OpenAI Chat Completions anti-truncation proxy gateway.
 
-By embedding the high-performance Go native core (`libantigravity.so`) via JNI, the app acts as a local proxy on your Android phone, tablet, emulator, or head unit. It completely resolves truncation, missing code block enclosures, and Gemini/CPA trailing turn 400 errors for clients such as **SillyTavern, Cherry Studio, and NextChat**.
+By embedding the high-performance Go native core (`libhelix.so`) via JNI, the app acts as a local proxy on your Android phone, tablet, emulator, or head unit. It completely resolves truncation, missing code block enclosures, and Gemini/CPA trailing turn 400 errors for clients such as **SillyTavern, Cherry Studio, and NextChat**.
 
 ---
 
@@ -720,7 +719,7 @@ By embedding the high-performance Go native core (`libantigravity.so`) via JNI, 
 
 #### Option A — Android (end users)
 
-1. Download `antigravity-gateway-v<version>.apk` (currently `v1.0.21`) from [Releases](https://github.com/Xeltra233/Antigravity-gateway/releases/latest).
+1. Download `helix-gateway-v<version>.apk` (currently `v2.0.0`) from [Releases](https://github.com/Xeltra233/Helix-gateway/releases/latest).
 2. Install it (allow "install from unknown sources" the first time).
 3. Open the app → tap **切换/新建** to add an upstream provider: base URL (e.g. `https://api.openai.com/v1`) and your upstream API key.
 4. Tap **启动网关** and wait for the status card to show **网关运行中**.
@@ -732,13 +731,13 @@ By embedding the high-performance Go native core (`libantigravity.so`) via JNI, 
 #### Option B — Server deployment (Linux / Windows / macOS)
 
 ```bash
-go build -o antigravity-gateway ./cmd/gateway
+go build -o helix-gateway ./cmd/gateway
 
 export UPSTREAM_BASE_URL="https://api.openai.com/v1"
 export UPSTREAM_API_KEY="<your upstream key>"
 export GATEWAY_API_KEY="sk-agw-local"        # what your clients send
 
-./antigravity-gateway --port 38472
+./helix-gateway --port 38472
 
 curl http://127.0.0.1:38472/healthz
 curl http://127.0.0.1:38472/v1/models -H "Authorization: Bearer sk-agw-local"
@@ -753,9 +752,9 @@ See [Configuration & Environment Variables](#️-configuration--environment-vari
 | Dimension | Supported | Notes |
 | --- | --- | --- |
 | Android | **8.0 (API 26) – 15** | `minSdk 26`, `targetSdk 34`; API 28 emulator verified for runtime behaviour |
-| ABIs | `arm64-v8a`, `x86_64`, `armeabi-v7a`, `x86` | All four `libantigravity.so` variants ship inside the APK |
+| ABIs | `arm64-v8a`, `x86_64`, `armeabi-v7a`, `x86` | All four `libhelix.so` variants ship inside the APK |
 | Theme | Light / Dark / Follow system | Top-right switcher; dark mode uses a dedicated palette, not an inverted one |
-| Crash reports | Private dir + `Android/data/<pkg>/files/crash-logs` (≤ Android 10) + `Download/AntigravityGateway/` (Android 11+) | See [Crash Reports & Safe Mode](#-crash-reports--safe-mode) |
+| Crash reports | Private dir + `Android/data/<pkg>/files/crash-logs` (≤ Android 10) + `Download/HelixGateway/` (Android 11+) | See [Crash Reports & Safe Mode](#-crash-reports--safe-mode) |
 | Binaries | Linux (amd64/arm64), Windows (amd64), macOS (amd64/arm64) | Published per release, versioned in lockstep with the APK |
 | Upstream | OpenAI Chat Completions (`/v1/models`, `/v1/chat/completions`) | Works with OpenAI, DeepSeek, Gemini-compatible layers, CPA, self-hosted relays |
 | Clients | SillyTavern, Cherry Studio, NextChat, OpenAI SDKs | Custom base URL + bearer key only |
@@ -796,9 +795,9 @@ The same report is written to several locations so that every Android version ha
 
 | Location | Path | When it is usable |
 | --- | --- | --- |
-| Private app dir | `/data/data/org.antigravity.gateway/files/crash-logs/` | Read by the in-app viewer; over ADB only with root/`run-as` |
-| App-external dir | `/sdcard/Android/data/org.antigravity.gateway/files/crash-logs/` | **Android 10 and below**: file managers, MTP, `adb pull` |
-| Public Downloads | `/sdcard/Download/AntigravityGateway/` | **Android 11+**: system file manager, chat apps, `adb pull` — written through MediaStore, no storage permission required |
+| Private app dir | `/data/data/org.helix.gateway/files/crash-logs/` | Read by the in-app viewer; over ADB only with root/`run-as` |
+| App-external dir | `/sdcard/Android/data/org.helix.gateway/files/crash-logs/` | **Android 10 and below**: file managers, MTP, `adb pull` |
+| Public Downloads | `/sdcard/Download/HelixGateway/` | **Android 11+**: system file manager, chat apps, `adb pull` — written through MediaStore, no storage permission required |
 
 Each report contains timestamp, app version, device model, Android version, ABIs, thread name and the full stack trace. Only the newest 5 files are kept per location; older ones are deleted automatically.
 
@@ -823,15 +822,15 @@ Every launch is counted. If **3 consecutive** launches fail to reach the UI (e.g
 
 ```bash
 adb logcat -s CrashReporter:I AndroidRuntime:E              # live crash records
-adb pull /sdcard/Download/AntigravityGateway/ ./crash-logs/  # Android 11+
-adb pull /sdcard/Android/data/org.antigravity.gateway/files/crash-logs/ ./crash-logs/  # Android ≤ 10
+adb pull /sdcard/Download/HelixGateway/ ./crash-logs/  # Android 11+
+adb pull /sdcard/Android/data/org.helix.gateway/files/crash-logs/ ./crash-logs/  # Android ≤ 10
 ```
 
 ---
 
 ### ⚙️ Technical Architecture & Security
 
-- **Native JNI Engine**: Core routing, synthetic transport protocol, and streaming state machine execute natively via `libantigravity.so`.
+- **Native JNI Engine**: Core routing, synthetic transport protocol, and streaming state machine execute natively via `libhelix.so`.
 - **In-Memory SQLite**: The Android bridge initializes SQLite with `:memory:` to ensure no plaintext key residue exists on disk.
 - **Keystore Encryption**: All credentials stored in `ConfigRepository` are encrypted with AES-256-GCM using keys generated inside the Android Keystore.
 
@@ -843,7 +842,7 @@ adb pull /sdcard/Android/data/org.antigravity.gateway/files/crash-logs/ ./crash-
 cd android
 ./gradlew :app:testReleaseUnitTest
 ./gradlew :app:assembleRelease
-# Output APK: android/app/build/outputs/apk/release/antigravity-gateway-v1.0.21.apk
+# Output APK: android/app/build/outputs/apk/release/helix-gateway-v2.0.0.apk
 ```
 
 ---
@@ -857,8 +856,8 @@ cd android
 
 ##### 2. Clone & Compile
 ```bash
-git clone https://github.com/Xeltra233/Antigravity-gateway.git
-cd Antigravity-gateway
+git clone https://github.com/Xeltra233/Helix-gateway.git
+cd Helix-gateway
 
 # Native compilation
 go build -trimpath -ldflags="-s -w" -o gateway ./cmd/gateway
@@ -920,7 +919,7 @@ The gateway follows 12-Factor App design principles and reads configuration foll
 | `ANTI_ROUTE_SEPARATOR` | No | `hyphen` | Mask separator: `hyphen` (`-`) or `wordjoiner` (U+2060) |
 | `ANTI_ROUTE_RULES_FILE` | No | empty | Extra rules file (JSON: `split_terms` / `scrub` / `replace`) |
 | `MODEL_REPORT` | No | `headers` | How the identified model is reported: `off`, `headers`, `body`, `both` |
-| `MODEL_REPORT_KEY` | No | `antigravity_model` | Field name used for the `body` report |
+| `MODEL_REPORT_KEY` | No | `helix_model` | Field name used for the `body` report |
 | `TEXT_MODEL_PATTERN` | No | - | Optional regex override to classify models as text/chat models |
 | `NON_TEXT_MODEL_PATTERN` | No | - | Optional regex override to classify models as non-text (vision/audio/embedding) to skip wrapper |
 | `MAX_REQUEST_BYTES` | No | `16777216` | Maximum allowed request size in bytes (default: 16MB) |
@@ -950,7 +949,7 @@ UPSTREAM_BASE_URL=https://api.openai.com
 UPSTREAM_API_KEY=sk-your-upstream-key-here
 
 # Recommended: Downstream client access key (Input this into SillyTavern / client)
-API_KEY=sk-antigravity-123456
+API_KEY=sk-helix-123456
 PORT=8080
 HOST=0.0.0.0
 
@@ -1003,7 +1002,7 @@ The gateway resolves the model actually served from the request fields, the resp
 | Mode | Content |
 | :--- | :--- |
 | `headers` (default) | `X-AGW-Model`, `X-AGW-Model-Family`, `X-AGW-Model-Version`, `X-AGW-Model-Capabilities`, `X-AGW-Model-Source`, `X-AGW-Route` |
-| `body` | an `antigravity_model` object in the response JSON (`model` / `family` / `version` / `capabilities` / `source` / `route` / `requested`), renameable via `MODEL_REPORT_KEY` |
+| `body` | an `helix_model` object in the response JSON (`model` / `family` / `version` / `capabilities` / `source` / `route` / `requested`), renameable via `MODEL_REPORT_KEY` |
 | `both` | Both of the above |
 
 `source` states where the value came from: `request`, `response-body`, `response-header`, `response-stream` (first stream event) or `fallback`. Streaming requests peek the first event before committing response headers, then replay it byte for byte, so stream timing is unchanged.
@@ -1029,29 +1028,29 @@ Or start directly via exported environment variables:
 ```bash
 export UPSTREAM_BASE_URL="https://your-upstream-domain.com"
 export UPSTREAM_API_KEY="sk-your-upstream-key"
-export API_KEY="sk-antigravity-123456"
+export API_KEY="sk-helix-123456"
 export PORT=8080
 
 ./gateway
 ```
 
 #### Method 3: Linux Systemd Service
-Create `/etc/systemd/system/antigravity-gateway.service`:
+Create `/etc/systemd/system/helix-gateway.service`:
 ```ini
 [Unit]
-Description=Antigravity Gateway Service
+Description=Helix Gateway Service
 After=network.target
 
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/opt/antigravity-gateway
-ExecStart=/opt/antigravity-gateway/gateway
+WorkingDirectory=/opt/helix-gateway
+ExecStart=/opt/helix-gateway/gateway
 Restart=always
 RestartSec=5
 Environment=UPSTREAM_BASE_URL=https://your-upstream-domain.com
 Environment=UPSTREAM_API_KEY=sk-your-upstream-key
-Environment=API_KEY=sk-antigravity-123456
+Environment=API_KEY=sk-helix-123456
 Environment=PORT=8080
 Environment=HOST=0.0.0.0
 
@@ -1061,21 +1060,21 @@ WantedBy=multi-user.target
 Enable and start the service:
 ```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now antigravity-gateway
-sudo systemctl status antigravity-gateway
+sudo systemctl enable --now helix-gateway
+sudo systemctl status helix-gateway
 ```
 
 #### Method 4: Docker / Docker Compose
 Run via Docker CLI:
 ```bash
 docker run -d \
-  --name antigravity-gateway \
+  --name helix-gateway \
   -p 8080:8080 \
   -e UPSTREAM_BASE_URL="https://your-upstream-domain.com" \
   -e UPSTREAM_API_KEY="sk-your-upstream-key" \
-  -e API_KEY="sk-antigravity-123456" \
+  -e API_KEY="sk-helix-123456" \
   --restart unless-stopped \
-  antigravity-gateway:latest
+  helix-gateway:latest
 ```
 
 Or via `docker-compose.yml`:
@@ -1085,13 +1084,13 @@ version: '3.8'
 services:
   gateway:
     build: .
-    container_name: antigravity-gateway
+    container_name: helix-gateway
     ports:
       - "8080:8080"
     environment:
       - UPSTREAM_BASE_URL=https://your-upstream-domain.com
       - UPSTREAM_API_KEY=sk-your-upstream-key
-      - API_KEY=sk-antigravity-123456
+      - API_KEY=sk-helix-123456
       - PORT=8080
     restart: unless-stopped
 ```
@@ -1145,17 +1144,17 @@ The gateway is 100% compliant with standard OpenAI `/v1` endpoints.
 #### 3. Cherry Studio / NextChat / Chatbox
 - **Provider**: OpenAI / OpenAI Compatible
 - **API Host**: `http://127.0.0.1:8080/v1`
-- **API Key**: `sk-antigravity-123456`
+- **API Key**: `sk-helix-123456`
 
 #### 4. cURL Verification
 - **Fetch Models**:
   ```bash
-  curl -s -H "Authorization: Bearer sk-antigravity-123456" http://127.0.0.1:8080/v1/models
+  curl -s -H "Authorization: Bearer sk-helix-123456" http://127.0.0.1:8080/v1/models
   ```
 - **Test Streaming Chat Completion**:
   ```bash
   curl http://127.0.0.1:8080/v1/chat/completions \
-    -H "Authorization: Bearer sk-antigravity-123456" \
+    -H "Authorization: Bearer sk-helix-123456" \
     -H "Content-Type: application/json" \
     -d '{
       "model": "gemini-3.5-flash-low",
@@ -1168,8 +1167,8 @@ The gateway is 100% compliant with standard OpenAI `/v1` endpoints.
 
 ### 🛡️ Health Checks & Observability
 
-- **Liveness Probe**: `GET /healthz` → returns `{"status":"ok","version":"1.0.21"}` (200 OK)
-- **Readiness Probe**: `GET /readyz` → returns `{"status":"ready","version":"1.0.21"}` (200 OK)
+- **Liveness Probe**: `GET /healthz` → returns `{"status":"ok","version":"2.0.0"}` (200 OK)
+- **Readiness Probe**: `GET /readyz` → returns `{"status":"ready","version":"2.0.0"}` (200 OK)
 - **Prometheus Metrics**: `GET /metrics` → exports standard metrics including request totals, latencies, active connections, and synthetic wrapper counts.
 - **Emergency Fallback**: Set `WRAPPER_MODE=off` in `.env` and restart the gateway to revert to transparent raw passthrough.
 
@@ -1178,15 +1177,15 @@ The gateway is 100% compliant with standard OpenAI `/v1` endpoints.
 ### 🗂️ Repository Layout
 
 ```text
-Antigravity-gateway/
+Helix-gateway/
 ├── cmd/
 │   ├── gateway/          # server entry point (CLI, multi-platform binaries)
-│   ├── androidbridge/    # JNI bridge, built into libantigravity.so
+│   ├── androidbridge/    # JNI bridge, built into libhelix.so
 │   └── live_test/        # end-to-end smoke client
 ├── internal/             # anti-truncation core: rewriting, streaming, retry/circuit breaker
 ├── pkg/                  # reusable libraries: upstream adapters, logging, config loading
 ├── android/              # Android project (Kotlin + Gradle)
-│   └── app/src/main/java/org/antigravity/gateway/
+│   └── app/src/main/java/org/helix/gateway/
 │       ├── GatewayApplication.kt   # startup: theme, crash recorder, safe mode
 │       ├── bridge/                 # JNI wrapper around the Go core
 │       ├── data/                   # config models, Keystore crypto, theme preferences
@@ -1209,10 +1208,10 @@ Antigravity-gateway/
 - Verify a release:
 
 ```bash
-gh release view v1.0.21
+gh release view v2.0.0
 sha256sum -c checksums.txt
-antigravity-gateway --version                                  # v1.0.21 (commit: ...)
-aapt2 dump badging antigravity-gateway-v1.0.21.apk | head -1    # APK version
+helix-gateway --version                                  # v2.0.0 (commit: ...)
+aapt2 dump badging helix-gateway-v2.0.0.apk | head -1    # APK version
 ```
 
 - Published versions are immutable: every change batch bumps the patch level and repeats the full verification chain (unit tests → device checks → release validation).
@@ -1244,7 +1243,7 @@ Internal refusal indicates sensitive keywords in the prompt card. Adjust your ch
 <a name="license"></a>
 ## 🤝 参与贡献 / Contributing
 
-- **问题反馈**：请附上应用内「查看崩溃日志」的内容（或 `下载/AntigravityGateway/` 里的文件）与系统版本、机型信息，能显著加快定位速度。
+- **问题反馈**：请附上应用内「查看崩溃日志」的内容（或 `下载/HelixGateway/` 里的文件）与系统版本、机型信息，能显著加快定位速度。
 - **提交改动**：Fork → 新建分支 → 保持 `versionCode`/`versionName` 与 Go 侧版本一致 → 运行 `./gradlew :app:testDebugUnitTest :app:lintDebug` 与 `go build ./...` → 提交 Pull Request。
 - **代码风格**：Kotlin 使用 4 空格缩进与不可变优先；Go 遵循标准 `gofmt`/`go vet`；提交信息使用 `feat:` / `fix:` / `ci:` / `docs:` 前缀。
 

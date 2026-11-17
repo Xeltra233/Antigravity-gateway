@@ -8,7 +8,7 @@
     -->
 
     <!-- 极简白 -->
-    <style name="Theme.AntigravityGateway" parent="Theme.MaterialComponents.Light.NoActionBar">
+    <style name="Theme.HelixGateway" parent="Theme.MaterialComponents.Light.NoActionBar">
         <item name="colorPrimary">#17181C</item>
         <item name="colorPrimaryVariant">#FBFBFC</item>
         <item name="colorPrimaryDark">#FBFBFC</item>
@@ -42,10 +42,11 @@
         <item name="agwChevron">#9AA1AB</item>
         <item name="agwSwitchOn">#2BB89A</item>
         <item name="agwSwitchOff">#DCDFE4</item>
+        <item name="isLightTheme">true</item>
     </style>
 
     <!-- 极简黑 -->
-    <style name="Theme.AntigravityGateway.MinDark" parent="Theme.MaterialComponents.NoActionBar">
+    <style name="Theme.HelixGateway.MinDark" parent="Theme.MaterialComponents.NoActionBar">
         <item name="colorPrimary">#ECEEF3</item>
         <item name="colorPrimaryVariant">#0F1013</item>
         <item name="colorPrimaryDark">#0F1013</item>
@@ -78,10 +79,11 @@
         <item name="agwChevron">#7D838E</item>
         <item name="agwSwitchOn">#2FCFAE</item>
         <item name="agwSwitchOff">#3A3D45</item>
+        <item name="isLightTheme">false</item>
     </style>
 
     <!-- 手绘线稿 -->
-    <style name="Theme.AntigravityGateway.Skc" parent="Theme.MaterialComponents.Light.NoActionBar">
+    <style name="Theme.HelixGateway.Skc" parent="Theme.MaterialComponents.Light.NoActionBar">
         <item name="colorPrimary">#A8C6EE</item>
         <item name="colorPrimaryVariant">#E4DCCB</item>
         <item name="colorPrimaryDark">#E4DCCB</item>
@@ -114,10 +116,11 @@
         <item name="agwChevron">#6F7787</item>
         <item name="agwSwitchOn">#6F9DD8</item>
         <item name="agwSwitchOff">#C9C3AE</item>
+        <item name="isLightTheme">true</item>
     </style>
 
     <!-- 丝绸缎面 -->
-    <style name="Theme.AntigravityGateway.Acr" parent="Theme.MaterialComponents.NoActionBar">
+    <style name="Theme.HelixGateway.Acr" parent="Theme.MaterialComponents.NoActionBar">
         <item name="colorPrimary">#2A3D66</item>
         <item name="colorPrimaryVariant">#0A1220</item>
         <item name="colorPrimaryDark">#0A1220</item>
@@ -150,6 +153,7 @@
         <item name="agwChevron">#7286A6</item>
         <item name="agwSwitchOn">#7AA2FF</item>
         <item name="agwSwitchOff">#33FFFFFF</item>
+        <item name="isLightTheme">false</item>
     </style>
 
     <!-- Rows open this dialog: a dark panel over the silk, matching the rest of the shell. -->

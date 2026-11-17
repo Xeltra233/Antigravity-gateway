@@ -1,15 +1,18 @@
 @echo off
 chcp 65001 >nul 2>&1
-title Antigravity Gateway
+title Helix Gateway
 
 cd /d "%~dp0"
 
 echo ===================================================
-echo   Antigravity Gateway
+echo   Helix Gateway
 echo ===================================================
 echo.
 
-"%~dp0gateway.exe"
+set "GATEWAY=%~dp0gateway.exe"
+if not exist "%GATEWAY%" set "GATEWAY=%~dp0bin\gateway.exe"
+
+"%GATEWAY%"
 
 if errorlevel 1 (
     echo.

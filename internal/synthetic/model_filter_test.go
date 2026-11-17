@@ -3,7 +3,7 @@ package synthetic
 import (
 	"testing"
 
-	"antigravity-gateway/internal/config"
+	"helix-gateway/internal/config"
 )
 
 func TestModelFilterClassification(t *testing.T) {
