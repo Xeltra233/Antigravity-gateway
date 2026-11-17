@@ -1,10 +1,10 @@
 # Helix Gateway
 
-**面向 OpenAI Chat Completions 协议的防截断兼容网关** —— Go 原生核心，可独立部署为服务端，也可通过 JNI 内嵌为 Android 本地代理。
+OpenAI Chat Completions 协议的防截断网关。Go 核心，既能作为独立服务端部署，也能通过 JNI 内嵌进 Android 应用，在手机上跑一个本地代理。
 
 [![Release](https://img.shields.io/github/v/release/Xeltra233/Helix-gateway?label=release)](https://github.com/Xeltra233/Helix-gateway/releases/latest)
 [![Build & Release](https://github.com/Xeltra233/Helix-gateway/actions/workflows/release.yml/badge.svg)](https://github.com/Xeltra233/Helix-gateway/actions/workflows/release.yml)
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)](#-license)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](#license)
 
 <p align="center">
   <img src="android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png" width="96" alt="App Icon" />
@@ -12,1242 +12,520 @@
 
 ---
 
-## 📑 目录 (Table of Contents)
+## 它解决什么问题
 
-- [🇨🇳 中文说明](#-中文说明)
-  - [项目简介](#-项目简介)
-  - [🚀 五分钟快速开始](#-五分钟快速开始)
-  - [🌟 核心特性](#-核心特性)
-  - [🧭 兼容性矩阵](#-兼容性矩阵)
-  - [📱 界面与功能使用](#-界面与功能使用)
-  - [🩺 崩溃诊断与安全模式](#-崩溃诊断与安全模式)
-  - [⚙️ 技术架构与安全性](#️-技术架构与安全性)
-  - [🛠️ 本地编译与构建](#️-本地编译与构建)
-  - [⚙️ 配置详解与环境变量](#️-配置详解与环境变量)
-  - [🚀 部署与运行方式](#-部署与运行方式)
-  - [🔑 多用户动态 Key 管理 API](#-多用户动态-key-管理-api)
-  - [📱 客户端接入实战](#-客户端接入实战)
-  - [🛡️ 运维监控与健康检查](#️-运维监控与健康检查)
-  - [🗂️ 项目结构](#️-项目结构)
-  - [📦 版本与发布流程](#-版本与发布流程)
-  - [❓ 常见问题排查 (FAQ)](#-常见问题排查-faq)
-- [🇬🇧 English Documentation](#-english-documentation)
-  - [Overview](#overview)
-  - [🚀 Quick Start](#-quick-start)
-  - [🌟 Key Features](#-key-features)
-  - [🧭 Compatibility Matrix](#-compatibility-matrix)
-  - [📱 UI & Usage Guide](#-ui--usage-guide)
-  - [🩺 Crash Reports & Safe Mode](#-crash-reports--safe-mode)
-  - [⚙️ Technical Architecture & Security](#️-technical-architecture--security)
-  - [🛠️ Build from Source](#️-build-from-source)
-  - [⚙️ Configuration & Environment Variables](#️-configuration--environment-variables)
-  - [🚀 Deployment Methods](#-deployment-methods)
-  - [🔑 Dynamic Multi-Key Management API](#-dynamic-multi-key-management-api)
-  - [📱 Client Integration](#-client-integration)
-  - [🛡️ Health Checks & Observability](#️-health-checks--observability)
-  - [🗂️ Repository Layout](#️-repository-layout)
-  - [📦 Versioning & Release Pipeline](#-versioning--release-pipeline)
-  - [❓ Frequently Asked Questions (FAQ)](#-frequently-asked-questions-faq)
-- [🤝 参与贡献 / Contributing](#-参与贡献--contributing)
-- [📄 License](#-license)
+客户端直连上游时，有三类问题会反复出现：
+
+- **截断**：上游在给出 `finish_reason` 之前断开连接，客户端把半截内容当成完整回复存下来。
+- **轮次 400**：Gemini、部分 CPA 上游要求对话以 `user` 结尾，末尾的 `assistant` 预填会被直接拒绝。
+- **未闭合结构**：Markdown 代码块、JSON 在断点处断在半句，后续轮次的上下文被污染。
+
+网关夹在客户端与上游之间，在链路上处理这三类问题。客户端只需要改一个 Base URL。
+
+**边界**：网关负责传输层与协议层的修复，**不代替客户端做续写**。流被上游截断时，它会给出明确的错误信号，是否继续由客户端的抗截断逻辑决定——例如 SillyTavern 配合抗截断脚本可以自动续写，不装脚本则收到提示、内容停在断点。
 
 ---
 
-<a name="中文说明"></a>
-## 🇨🇳 中文说明
+## 快速开始
 
-### 📖 项目简介
+### Android
 
-**Helix Gateway for Android**（包名 `org.helix.gateway`）是专为 Android 平台定制的极简本地 OpenAI Chat Completions 防截断代理网关。
+1. 从 [Releases](https://github.com/Xeltra233/Helix-gateway/releases/latest) 下载 `helix-gateway-v<版本>.apk`。
+2. 安装并打开（首次需允许安装未知来源应用）。
+3. 点「切换/新建」填上游：**上游地址** 如 `https://api.openai.com/v1`，**上游 Key** 填你的密钥。
+4. 回到主界面点「启动网关」，状态变为「网关运行中」。
+5. 复制界面上显示的应用链接（形如 `http://192.168.x.x:38472/v1`）和下游 Key（`sk-agw-...`）。
+6. 用界面上的「拉取模型」「消息测试」确认端到端连通，然后到客户端里正常对话。
 
-移动端通过 JNI 内嵌编译好的 Go 原生核心动态库（`libhelix.so`），无需依赖任何云端中转或外部服务器，直接在 Android 手机/平板/车机/模拟器本地启动防截断网关，彻底解决 **SillyTavern 酒馆、Cherry Studio、NextChat** 等客户端在移动设备上游玩时的回答截断、Gemini/CPA 轮次 400 报错及未闭合 Markdown/JSON 代码块问题。
+密钥以 Android Keystore AES-GCM 加密存储在本机，上游请求由手机直接发出，不经过任何中转。
 
----
-
-### 🚀 五分钟快速开始
-
-#### 场景 A：Android 用户（推荐普通用户）
-
-1. 打开 [Releases](https://github.com/Xeltra233/Helix-gateway/releases/latest)，下载 `helix-gateway-v<版本>.apk`（当前为 `v2.0.0`）。
-2. 在手机上安装 APK（首次安装需允许「安装未知来源应用」）。
-3. 打开应用 → 点击「切换/新建」填写上游供应商：
-   - **上游地址**：如 `https://api.openai.com/v1`（或任何兼容 Chat Completions 的服务）
-   - **上游 Key**：你的上游 API Key
-4. 回到主界面点击「启动网关」，等待状态变为「网关运行中」。
-5. 复制界面上的 **访问地址**（形如 `http://192.168.x.x:38472/v1`）与 **访问 Key**（`sk-agw-...`）填入客户端。
-6. 用界面上的「拉取模型」/「消息测试」按钮确认端到端可用，然后在客户端里正常对话。
-
-> 密钥只保存在本机（Android Keystore 加密），不上传任何第三方服务器；上游请求由手机直接发出。
-
-#### 场景 B：服务端部署（Linux / Windows / macOS）
+### 服务端
 
 ```bash
-# 1. 获取二进制（Release 页面按平台下载），或从源码编译
-go build -o helix-gateway ./cmd/gateway
+# 1. 取二进制：Release 页按平台下载，或自行编译
+go build -trimpath -ldflags="-s -w" -o helix-gateway ./cmd/gateway
 
-# 2. 配置最小可用环境变量
+# 2. 最小配置
 export UPSTREAM_BASE_URL="https://api.openai.com/v1"
-export UPSTREAM_API_KEY="<你的上游 Key>"
-export GATEWAY_API_KEY="sk-agw-local"      # 下游客户端填写这个
+export UPSTREAM_API_KEY="sk-your-upstream-key"
+export API_KEY="sk-helix-local"        # 下游客户端填这个
+export PORT=8080
 
 # 3. 启动
-./helix-gateway --port 38472
+./helix-gateway
 
 # 4. 验证
-curl http://127.0.0.1:38472/healthz
-curl http://127.0.0.1:38472/v1/models -H "Authorization: Bearer sk-agw-local"
+curl http://127.0.0.1:8080/healthz
+curl -H "Authorization: Bearer sk-helix-local" http://127.0.0.1:8080/v1/models
 ```
 
-完整变量说明见 [配置详解与环境变量](#️-配置详解与环境变量)，多用户动态 Key 见 [多用户动态 Key 管理 API](#-多用户动态-key-管理-api)。
+端口只能用 `PORT` 环境变量设置，命令行只接受 `--version`。
 
 ---
 
-### 🌟 核心特性
-9. **三态主题切换**：右上角一键切换「浅色 / 深色 / 跟随系统」，深色模式使用独立配色方案（背景 #121212、卡片 #1E1E1E、正文 #ECECEC），夜间自动跟随系统设置。
-10. **崩溃自诊断链路**：未捕获异常自动落盘（应用私有目录 + `Android/data` 外部目录 + Android 11+ 公共下载目录），内置查看 / 复制 / 分享 / 清除，并提供连续启动失败自动进入的安全模式。
+## 客户端接入
 
-1. **极简单屏交互**：
-   - 专为移动端设计的单屏 Material Design 界面，无繁琐层级，所有关键信息与操作一屏触达。
-2. **多供应商独立管理**：
-   - 支持多套上游供应商配置自由切换与新建；
-   - 支持通过卡片右侧 ✏️ 编辑图标或长按供应商名称直接重命名；
-   - 具备最后一个供应商删除保护机制，防止误删配置。
-3. **全局独立下游 Key**：
-   - 首次启动自动生成高熵 `sk-agw-...` 密钥，独立于各个供应商；
-   - 切换或修改供应商完全不影响下游客户端配置；
-   - 支持重新生成并一键复制到剪贴板，支持明文/密文切换查看。
-4. **系统级 Keystore 硬件加密**：
-   - 所有上游 API Key 与全局下游 Key 均采用 **Android Keystore AES-GCM** 加密后持久化存储；
-   - 绝不向外部存储、明文 SharedPreferences 或系统日志泄露密钥。
-5. **固定冷门端口与局域网应用链接**：
-   - 进程绑定监听冷门固定端口 `38472`（`HOST=0.0.0.0`）；
-   - 界面自动识别并显示本机局域网 IP 与应用链接（`http://<IP>:38472/v1`），支持一键复制到酒馆或客户端中。
-6. **前台服务后台保活 & 划走停机**：
-   - 启动网关后自动挂载常驻前台服务通知，退至后台、息屏或切换 App 时代理服务不中断；
-   - 在系统多任务卡片中划走应用或在界面点击「停止」时，网关优雅退出并释放端口占用。
-7. **内置直连验证客户端**：
-   - 界面内置「拉取模型」（`GET /v1/models`）与「消息测试」（`POST /v1/chat/completions`）功能；
-   - 拉取成功后自动回填首个可用模型 ID，点击即可完成端到端收发连通性测试。
-8. **全 CPU 架构 ABI 适配**：
-   - 预编译打包全部 4 种 Android ABI：`arm64-v8a`、`x86_64`、`armeabi-v7a`、`x86`。
+网关对外暴露标准 OpenAI `/v1` 协议。
+
+| 参数 | 值 |
+| --- | --- |
+| Base URL | `http://127.0.0.1:8080/v1`（局域网或远端换成对应 IP / 域名） |
+| API Key | `API_KEY` 或 `DOWNSTREAM_KEYS_JSON` 里的有效 Key |
+| 模型 | 上游原生模型名，如 `gemini-3.5-flash-low`、`claude-sonnet-4-6` |
+
+`/v1/*` 始终要求 Bearer Key。没有配置任何下游 Key 时，请求一律 401，不会退化成免认证模式。
+
+**SillyTavern**：API 选 `Chat Completion`，Custom Endpoint 填 `http://127.0.0.1:8080/v1`，API Key 填下游 Key，点 Connect 后选模型。
+
+**Cherry Studio / NextChat / Chatbox**：提供商类型选 OpenAI 兼容，API 地址同上，Key 同上。
+
+**cURL 验证**
+
+```bash
+# 模型列表
+curl -s -H "Authorization: Bearer sk-helix-local" \
+  http://127.0.0.1:8080/v1/models
+
+# 流式对话
+curl -N http://127.0.0.1:8080/v1/chat/completions \
+  -H "Authorization: Bearer sk-helix-local" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "gemini-3.5-flash-low",
+    "messages": [{"role": "user", "content": "写一段 500 字的故事。"}],
+    "stream": true
+  }'
+```
 
 ---
 
-### 🧭 兼容性矩阵
+## 防截断怎么做
 
-| 维度 | 支持范围 | 说明 |
+### 合成传输工具
+
+`WRAPPER_MODE=prefer` 时，网关向模型声明一个自己生成的工具（名字由词池拼装，或按 `SYNTHETIC_TOOL_PREFIX` 加 96-bit 随机串），让回复以工具调用参数的形式落地。这样即使上游在文本流上截断，结构化的参数壳仍能约束输出完整性，网关再把参数还原成普通的 `delta.content` 发给客户端。
+
+客户端看到的依然是标准流式响应，不需要理解这套机制。非文本模型（生图、嵌入、语音）由 `TEXT_MODEL_PATTERN` / `NON_TEXT_MODEL_PATTERN` 判定后跳过包装，走纯透传。
+
+紧急回滚：`WRAPPER_MODE=off` 即恢复原生透传。
+
+### 流式收尾语义
+
+这是网关判断"这次回复到底完没完"的地方：
+
+- 只有确认上游给出了 `finish_reason`，或上游主动发了 `[DONE]`，网关才向客户端补一次 `data: [DONE]`。
+- 上游断流、连接中断、事件不完整时，网关发 `event: error` 帧，**不伪造终止符**。半截内容配上假的 `[DONE]` 会让客户端的完整性检查误判为正常结束，这比明确报错更糟。
+- 上游的 `event:` / `id:` / `retry:` 字段行、以及 `: comment` 注释帧一律原样透传；无法解析的载荷不丢弃，原样转发。
+- 上游自己发的 error 帧原样透传，其后不再追加终止符。
+- 连续 `STREAM_HEARTBEAT_MS`（默认 15 秒）没有数据下行时，网关补一帧 `: keep-alive`。这是给 nginx `proxy_read_timeout` 一类中间层看的，客户端解析时会当作注释丢弃。
+
+### 超时模型
+
+`UPSTREAM_TIMEOUT_MS`（默认 120000）的含义随请求类型变化：
+
+- **非流式**：每次上游尝试的总预算，包含读完 body。
+- **流式**：先是首字超时；流一旦开始，转为读空闲超时——连续这么久没有任何字节才切断，活跃的长生成不受总时长限制。
+
+首字超时返回 `504 upstream_timeout`。已经开始的流被空闲看门狗切断时，客户端会收到 `event: error`。
+
+### 恢复策略
+
+| 值 | 行为 |
+| --- | --- |
+| `repair`（默认） | 本地确定性修复：补齐未闭合的 JSON、修正断裂的工具参数结构 |
+| `repair_then_retry` | 修不好时做一次安全重试 |
+| `fail` | 直接返回错误 |
+
+上游返回完全空响应时按 `UPSTREAM_EMPTY_RETRIES`（默认 3）重试。
+
+### 出站请求形态
+
+上游若按请求体特征做内容分类，命中词表可能静默降级。网关提供一道可逆的分级防护，只改出站字节形态，不动语义：
+
+| 级别 | 行为 | 还原方式 |
 | --- | --- | --- |
-| Android 版本 | **8.0 (API 26) ~ 15** | `minSdk 26`、`targetSdk 34`，已验证 API 28 真机级模拟器与 API 34 编译链 |
-| CPU 架构 | `arm64-v8a` / `x86_64` / `armeabi-v7a` / `x86` | APK 内置全部 4 种 ABI 的 `libhelix.so`，模拟器与真机通用 |
-| 界面主题 | 浅色 / 深色 / 跟随系统 | 右上角开关一键切换，深色模式为独立配色（非简单反色） |
-| 崩溃日志目录 | 应用私有目录 + `Android/data/<包名>/files/crash-logs`（≤ Android 10 可浏览） + `下载/HelixGateway/`（Android 11+） | 详见 [崩溃诊断与安全模式](#-崩溃诊断与安全模式) |
-| 服务端二进制 | Linux（amd64/arm64）、Windows（amd64）、macOS（amd64/arm64） | Release 页面按平台发布，版本号与 APK 同步 |
-| 上游协议 | OpenAI Chat Completions（`/v1/models`、`/v1/chat/completions`） | 兼容 OpenAI、DeepSeek、Gemini 兼容层、CPA、各类中转 |
-| 下游客户端 | SillyTavern、Cherry Studio、NextChat、OpenAI SDK | 只需自定义 Base URL + Bearer Key |
+| `off` | 不处理 | — |
+| `wire`（默认） | 请求体中的非 ASCII 字符写成 `\uXXXX` | 上游解析后语义不变 |
+| `standard` | `wire` + 前导指令块中的高风险词替换为等价表述 | 只改网关自己的指令文本 |
+| `deep` | `standard` + 词表中性词拆分掩码（`甲-乙`），可选把末尾 `assistant` 预填降级为 `user` | 响应中的掩码在转发前还原成原词 |
+
+流式响应按事件解码后逐段还原，跨事件被切开的掩码词也能拼回来。自定义规则通过 `ANTI_ROUTE_RULES_FILE` 追加，格式 `{"split_terms": [...], "scrub": {"原文": "替换"}, "replace": false}`。
+
+### 轮次闭环
+
+末尾悬空的 `assistant` 预填、或与 Gemini 轮次约束冲突的系统提示，会被自适应修正为 `user` 结尾，避免触发 `Requests ending with a model turn are not supported`。
 
 ---
 
-### 📱 界面与功能使用
+## 配置
 
-#### 1. 配置供应商
-- 点击「切换/新建」添加新供应商或切换已有供应商；
-- 点击供应商名称右侧的 ✏️ 图标或长按名称可重命名当前供应商；
-- 填入对应供应商的 **上游 URL** 与 **上游 Key**。
+配置按以下优先级加载，先命中先用：
 
-#### 2. 配置下游与启动
-- 在「全局下游 Key」区域点击「生成」生成专属 Key，或点击「复制」将其填入客户端；
-- 点击蓝色 **「启动」** 按钮，状态变为「停止」且通知栏显示前台保活服务，应用链接高亮显示；
-- 复制界面展示的 **应用链接**（例如 `http://192.168.1.100:38472/v1`）填入客户端的 Base URL。
+1. 系统或终端已有的环境变量（适合 CI/CD 与 `docker -e`）
+2. `ENV_FILE` 指定路径的文件
+3. 当前工作目录下的 `.env`
+4. 可执行文件同级目录的 `.env`（Windows 双击运行、服务自启动依赖这一条）
+5. 父级目录的 `../.env`
 
-#### 3. 客户端接入示例 (SillyTavern / Cherry Studio)
-- **API 类型**: `OpenAI / Chat Completions`
-- **Base URL / 自定义端点**: `http://<手机IP>:38472/v1`（同设备运行填 `http://127.0.0.1:38472/v1`）
-- **API Key**: 填入应用内复制的全局下游 Key（如 `sk-agw-...`）
-- **模型**: 选择或输入上游原生模型名称（如 `gemini-3.5-flash-low`, `claude-sonnet-4-6` 等）
+`.env` 带 UTF-8 BOM 也能读，Windows 记事本直接保存不用额外处理。
 
----
+### 上游
 
-### 🩺 崩溃诊断与安全模式
-
-手机厂商定制系统（MIUI / HyperOS / EMUI 等）偶发「点开就闪退」，而普通用户拿不到日志。为此应用内置了完整的自诊断链路：
-
-#### 1. 崩溃日志的三个位置
-
-应用在崩溃发生的瞬间会把同一份报告写入多个位置，确保任何系统版本都能取到：
-
-| 位置 | 路径 | 适用场景 |
+| 变量 | 默认 | 说明 |
 | --- | --- | --- |
-| 应用私有目录 | `/data/data/org.helix.gateway/files/crash-logs/` | 应用内「查看崩溃日志」读取；需 root/`run-as` 才能在电脑上直接取 |
-| 应用外部目录 | `/sdcard/Android/data/org.helix.gateway/files/crash-logs/` | **Android 10 及以下**：文件管理器 / USB / `adb pull` 直接可读 |
-| 公共下载目录 | `/sdcard/Download/HelixGateway/` | **Android 11 及以上**：系统文件管理器、微信、QQ 都能直接打开（通过 MediaStore 写入，无需存储权限） |
+| `UPSTREAM_BASE_URL` | 必填 | 上游根地址，末尾 `/v1` 会自动补齐或规范化 |
+| `UPSTREAM_API_KEY` | 视模式 | 上游 Bearer 密钥，`UPSTREAM_AUTH_MODE=bearer` 时必需 |
+| `UPSTREAM_AUTH_MODE` | `bearer` | `bearer` 或 `none` |
+| `UPSTREAM_TIMEOUT_MS` | `120000` | 见[超时模型](#超时模型)，范围 1000–600000 |
+| `UPSTREAM_EMPTY_RETRIES` | `3` | 上游完全空响应时的重试次数，0–10 |
+| `UPSTREAM_MAX_IDLE_CONNS` | `2048` | 连接池最大空闲连接 |
+| `UPSTREAM_MAX_IDLE_CONNS_PER_HOST` | `512` | 单 Host 最大空闲连接 |
+| `UPSTREAM_MAX_CONNS_PER_HOST` | `512` | 单 Host 最大并发连接 |
 
-报告内容包含时间、应用版本、设备型号、Android 版本、ABI、线程名与完整堆栈；每个位置最多保留最新 5 份，自动清理旧文件。
+### 下游鉴权
 
-#### 2. 应用内查看 / 分享 / 清除
+| 变量 | 默认 | 说明 |
+| --- | --- | --- |
+| `API_KEY` | — | 单一访问 Key，与 `DOWNSTREAM_KEYS_JSON` 二选一 |
+| `DOWNSTREAM_KEYS_JSON` | `[]` | 静态多 Key 配置，JSON 数组 |
+| `ADMIN_API_KEY` | `admin-secret-key-12345` | `/admin/keys` 管理接口鉴权，自定义时至少 8 字符 |
+| `KEY_HMAC_SECRET` | 内置 | 下游 Key 的 HMAC-SHA256 签名密钥，自定义时至少 16 字符 |
+| `KEY_DB_PATH` | `./data/keys.sqlite` | 动态 Key 持久化路径 |
 
-主界面底部「查看崩溃日志」按钮（有日志时才显示，带条数）：
+`ADMIN_API_KEY` 的默认值等于公开。部署到可被访问的地址前务必改掉。
 
-- **查看**：弹窗展示最新一份报告的完整内容与上述路径提示；
-- **复制**：一键复制全文，便于粘贴到聊天窗口；
-- **分享**：调起系统分享面板，直接发到微信 / 邮件 / 任意应用；
-- **清除**：同时删除上述三处目录中的全部报告。
+### 防截断
 
-#### 3. 安全模式（连续启动失败保护）
+| 变量 | 默认 | 说明 |
+| --- | --- | --- |
+| `WRAPPER_MODE` | `prefer` | `prefer` 自适应包装 / `required` 强制 / `off` 纯透传 |
+| `RECOVERY_POLICY` | `repair` | `repair` / `repair_then_retry` / `fail` |
+| `CONTROL_MESSAGE_ROLE` | `system` | `system` 或 `developer` |
+| `CONTROL_MESSAGE_POSITION` | `tail` | `tail`（末尾强约束）/ `head` / `system_tail` |
+| `SYNTHETIC_TOOL_PREFIX` | 空 | 固定工具名前缀，留空则随机拼装 |
+| `SYNTHETIC_TOOL_STRICT` | `false` | 是否发送严格 Tool Schema |
+| `TEXT_MODEL_PATTERN` | — | 正则：哪些模型按文本对话处理并启用防截断 |
+| `NON_TEXT_MODEL_PATTERN` | — | 正则：哪些模型跳过包装直接透传 |
+| `STREAM_HEARTBEAT_MS` | `15000` | 下行静默保活间隔，0 关闭 |
+| `STREAM_SIDE_BUFFER_BYTES` | `0` | 流式旁路缓冲，0 表示零额外延迟直发 |
 
-应用每次启动都会记账：若连续 **3 次**启动都没能进入正常界面（例如主题初始化或某个可选组件在特定 ROM 上抛异常），下次启动会自动进入 **安全模式**：
+### 请求形态
 
-- 跳过主题、可选初始化等非必要逻辑，只保证界面能起来；
-- 顶部显示「安全模式：检测到连续 N 次启动未成功…」提示条，并强制显示崩溃日志入口；
-- 界面成功显示后计数自动清零，安全模式在下次正常启动时自动退出。
+| 变量 | 默认 | 说明 |
+| --- | --- | --- |
+| `ENTROPY_LEVEL` | `standard` | `off` / `light` / `standard` / `aggressive` |
+| `ENTROPY_LAYOUT` | 随等级 | 覆盖 JSON 键序与空白随机化 |
+| `ENTROPY_INVISIBLE` | 随等级 | 覆盖网关注入文本中的零宽分隔符 |
+| `ENTROPY_PARAM_JITTER` | 随等级 | 覆盖采样参数 ±0.01 微扰 |
+| `ENTROPY_SEED` | 随机 | 固定随机种子，仅用于复现问题 |
+| `ANTI_ROUTE_LEVEL` | `wire` | `off` / `wire` / `standard` / `deep` |
+| `ANTI_ROUTE_WIRE_ESCAPE` | 随等级 | 覆盖 `\uXXXX` 转义 |
+| `ANTI_ROUTE_SCRUB` | 随等级 | 覆盖指令块净化 |
+| `ANTI_ROUTE_SPLIT` | 随等级 | 覆盖拆词掩码 |
+| `ANTI_ROUTE_DEMOTE_PREFILL` | 随等级 | 覆盖末尾 `assistant` 预填降级 |
+| `ANTI_ROUTE_SCRUB_SCOPE` | `leading` | `leading` 仅前导指令块 / `all` 全部 system 文本 |
+| `ANTI_ROUTE_SEPARATOR` | `hyphen` | `hyphen`(`-`) 或 `wordjoiner`(U+2060) |
+| `ANTI_ROUTE_RULES_FILE` | — | 追加规则文件路径 |
+| `MODEL_REPORT` | `headers` | `off` / `headers` / `body` / `both` |
+| `MODEL_REPORT_KEY` | `helix_model` | `body` 回传时的字段名 |
 
-这样即使遇到厂商 ROM 的兼容性问题，用户也能自己把日志发给开发者定位，而不是面对一个「打开就消失」的应用。
+`ENTROPY_LEVEL=off` 会让工具名固定为 `agw_emit_` + 96-bit 随机串，控制提示词与 JSON 布局回到单一写法。
 
-#### 4. 手动抓取日志（进阶）
+### 限流与体积
 
-```bash
-# 实时观察崩溃记录（需开启 USB 调试）
-adb logcat -s CrashReporter:I AndroidRuntime:E
+| 变量 | 默认 | 说明 |
+| --- | --- | --- |
+| `MAX_REQUEST_BYTES` | `16777216` | 请求体上限（16MB） |
+| `MAX_RESPONSE_BYTES` | `16777216` | 响应体上限（16MB） |
+| `MAX_CONCURRENT_REQUESTS` | `1024` | 全局并发上限 |
+| `MAX_CONCURRENT_REQUESTS_PER_KEY` | `64` | 单 Key 并发上限 |
+| `REQUEST_QUEUE_TIMEOUT_MS` | `50` | 过载排队等待上限 |
 
-# 拉取公共下载目录中的报告（Android 11+ 同样可用）
-adb pull /sdcard/Download/HelixGateway/ ./crash-logs/
+### 运维
 
-# Android 10 及以下还可以拉取应用外部目录
-adb pull /sdcard/Android/data/org.helix.gateway/files/crash-logs/ ./crash-logs/
-```
+| 变量 | 默认 | 说明 |
+| --- | --- | --- |
+| `HOST` | 全部网卡 | 监听地址，留空即 `0.0.0.0` |
+| `PORT` | `8080` | 监听端口（Android 端固定 38472） |
+| `LOG_LEVEL` | `info` | `debug` / `info` / `warn` / `error` |
+| `TRUST_PROXY` | `false` | 是否信任 `X-Forwarded-For` |
+| `MODELS_CACHE_TTL_MS` | `30000` | `/v1/models` 缓存时长 |
+| `SHUTDOWN_TIMEOUT_MS` | `30000` | 优雅关机超时 |
 
----
+### `.env` 示例
 
-### ⚙️ 技术架构与安全性
-
-```
-┌────────────────────────────────────────────────────────┐
-│                   Android Application                  │
-│  ┌───────────────────────┐  ┌───────────────────────┐  │
-│  │   UI (Material 3)     │  │  GatewayService       │  │
-│  │   MainActivity / VM   │  │  Foreground KeepAlive │  │
-│  └───────────┬───────────┘  └───────────┬───────────┘  │
-│              │                          │              │
-│  ┌───────────▼───────────┐              │              │
-│  │   ConfigRepository    │              │              │
-│  │   Keystore AES-GCM    │              │              │
-│  └───────────────────────┘              │              │
-│                                         │              │
-│  ┌──────────────────────────────────────▼───────────┐  │
-│  │ JNI Bridge (org.helix.gateway.bridge)      │  │
-│  └──────────────────────┬───────────────────────────┘  │
-└─────────────────────────┼──────────────────────────────┘
-                          │ CGO / JNI
-┌─────────────────────────▼──────────────────────────────┐
-│  Go Native Core (libhelix.so)                    │
-│  • Synthetic Transport Tool Engine                     │
-│  • Incremental SSE State Machine                       │
-│  • Chat Turn Sanitizer & Bounded Repair                │
-│  • Embedded SQLite (:memory:)                          │
-│  • Listening on 0.0.0.0:38472                          │
-└────────────────────────────────────────────────────────┘
-```
-
-- **数据安全**：所有配置采用系统级 Hardware-backed Keystore 提供的 AES-GCM-256 算法加密存储于应用内部隔离空间。
-- **内存数据库**：Android 运行时将 Key 鉴权 SQLite 数据库配置为 `:memory:` 纯内存模式，杜绝文件系统持久化明文残留与权限异常。
-
----
-
-### 🛠️ 本地编译与构建
-
-#### 环境要求
-- JDK 17+
-- Android SDK (API 34, Build-Tools 34.0.0)
-- NDK (26.3.11579264 或兼容版本)
-- Go 1.24+ (如需重新交叉编译 JNI `.so` 库)
-
-#### 构建步骤
-```bash
-# 1. 进入 Android 项目目录
-cd android
-
-# 2. 运行单元测试
-./gradlew :app:testReleaseUnitTest
-
-# 3. 构建 Release APK
-./gradlew :app:assembleRelease
-
-# 产物输出路径:
-# android/app/build/outputs/apk/release/helix-gateway-v2.0.0.apk
-```
-
----
-
-#### 方案 C：从源码自行编译（需安装 Go 1.25+）
-如果你希望自己修改代码并编译：
-
-##### 1. 安装 Go 语言环境（如尚未安装）
-- **Windows**: 打开 PowerShell 执行 `winget install GoLang.Go`，或从 [Go 官网下载安装包](https://go.dev/dl/)。
-- **Ubuntu / Debian**: 
-  ```bash
-  sudo apt update && sudo apt install -y golang
-  ```
-- **macOS**: 
-  ```bash
-  brew install go
-  ```
-
-##### 2. 获取源码
-```bash
-git clone https://github.com/Xeltra233/Helix-gateway.git
-cd Helix-gateway
-```
-
-##### 3. 执行编译命令
-- **Linux / macOS 本地编译**:
-  ```bash
-  go build -trimpath -ldflags="-s -w" -o gateway ./cmd/gateway
-  chmod +x gateway
-  ```
-
-- **Windows 本地编译 (PowerShell / CMD)**:
-  ```bash
-  go build -trimpath -ldflags="-s -w" -o gateway.exe ./cmd/gateway
-  ```
-
-- **查看版本信息**:
-  ```bash
-  ./gateway -v
-  # 输出: Helix Gateway version 2.0.0 (commit: ..., built: ...)
-  ```
-
-- **跨平台交叉编译 (在一台机器上为其他系统编译)**:
-  ```bash
-  # 编译 Linux 64位服务器运行的二进制
-  CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o gateway-linux-amd64 ./cmd/gateway
-
-  # 编译 Windows 运行的 EXE 文件
-  CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o gateway.exe ./cmd/gateway
-  ```
----
-
-### ⚙️ 配置详解与环境变量
-
-网关采用**环境变量与 `.env` 配置文件优先（12-Factor App）**的设计，遵循以下优先级：
-1. **系统/终端已存在的环境变量**（最高优先级，适合 CI/CD 与 Docker `-e` 注入）；
-2. **`ENV_FILE` 变量指定路径**的配置文件；
-3. **当前工作目录下的 `.env`**；
-4. **可执行文件同级目录下的 `.env`**（特别保证 Windows 双击运行与 Windows 服务自启）；
-5. **父级目录下的 `../.env`**。
-
-> 💡 **自动剥离 UTF-8 BOM**：支持在 Windows 记事本中直接新建并保存 `.env`，网关会自动处理 BOM 头，绝不报错。
-
-#### 环境变量完整参考表
-
-| 环境变量 | 必需 | 默认值 | 详细说明 |
-| :--- | :---: | :--- | :--- |
-| **`UPSTREAM_BASE_URL`** | **是** | - | 上游 API 根链接（如 `https://api.openai.com` 或代理中转地址，末尾 `/v1` 会自动补齐/规范化） |
-| **`UPSTREAM_API_KEY`** | 视模式 | - | 上游 Bearer API 密钥（当 `UPSTREAM_AUTH_MODE=bearer` 时必需） |
-| `UPSTREAM_AUTH_MODE` | 否 | `bearer` | 上游鉴权模式：`bearer` 或 `none`（上游无需鉴权或本地代理时） |
-| `UPSTREAM_TIMEOUT_MS` | 否 | `120000` | 上游请求单次超时时间（毫秒，默认 2 分钟） |
-| `PORT` | 否 | `8080` | 网关本地监听端口 |
-| `HOST` | 否 | `0.0.0.0` | 网关监听网络地址 |
-| `API_KEY` | 视情况 | - | 下游客户端简易访问 Key（**推荐配置**）。与 `DOWNSTREAM_KEYS_JSON` 二选一，网关 `/v1/*` 接口强制要求有效 Bearer Key。 |
-| `ENV_FILE` | 否 | - | 自定义指定加载的 `.env` 配置文件路径 |
-| `WRAPPER_MODE` | 否 | `prefer` | 包装模式：`prefer`（推荐，自适应注入合成协议）、`required`（强制要求）、`off`（紧急透明透传回滚） |
-| `RECOVERY_POLICY` | 否 | `repair` | 格式恢复策略：`repair`（本地确定性修复）、`repair_then_retry`（单次安全重试）、`fail`（直接报错） |
-| `UPSTREAM_EMPTY_RETRIES` | 否 | `3` | 上游空回（完全没有任何输出）时的自动重试次数 |
-| `CONTROL_MESSAGE_ROLE` | 否 | `system` | 控制提示词角色：`system` 或 `developer` |
-| `CONTROL_MESSAGE_POSITION`| 否 | `tail` | 控制提示词注入位置：`tail`（末尾强生效）、`head`、`system_tail` |
-| `SYNTHETIC_TOOL_PREFIX` | 否 | 空（随机名） | 固定工具名前缀；留空时由熵源自行拼接工具名，填写后按 `前缀 + 96-bit 随机串` 生成 |
-| `SYNTHETIC_TOOL_STRICT` | 否 | `false` | 是否向模型发送严格（Strict）Tool Schema 约束 |
-| `ENTROPY_LEVEL` | 否 | `standard` | 请求形态随机化强度：`off`（关闭）、`light`（仅标识符与 JSON 布局）、`standard`（布局 + 措辞）、`aggressive`（追加不可见分隔符与采样参数微扰） |
-| `ENTROPY_LAYOUT` | 否 | 随 `ENTROPY_LEVEL` | 覆盖 JSON 键序与空白排版随机化开关（`true`/`false`） |
-| `ENTROPY_INVISIBLE` | 否 | 随 `ENTROPY_LEVEL` | 覆盖网关注入文本中的零宽分隔符开关（仅作用于网关自身生成的指令文本，不改动对话内容） |
-| `ENTROPY_PARAM_JITTER` | 否 | 随 `ENTROPY_LEVEL` | 覆盖采样参数微扰开关（`temperature` 与 `top_p` 在 ±0.01 内浮动，带边界钳制） |
-| `ENTROPY_SEED` | 否 | 随机 | 固定随机种子（仅用于复现问题，生产环境留空） |
-| `ANTI_ROUTE_LEVEL` | 否 | `wire` | 出站请求防路由层级：`off`、`wire`（非 ASCII 转义）、`standard`（追加指令块净化）、`deep`（追加拆词掩码与响应侧还原） |
-| `ANTI_ROUTE_WIRE_ESCAPE` | 否 | 随 `ANTI_ROUTE_LEVEL` | 覆盖 `\uXXXX` 转义开关 |
-| `ANTI_ROUTE_SCRUB` | 否 | 随 `ANTI_ROUTE_LEVEL` | 覆盖指令块净化开关 |
-| `ANTI_ROUTE_SPLIT` | 否 | 随 `ANTI_ROUTE_LEVEL` | 覆盖拆词掩码开关（可逆，响应侧自动还原） |
-| `ANTI_ROUTE_DEMOTE_PREFILL` | 否 | 随 `ANTI_ROUTE_LEVEL` | 覆盖末尾 assistant 预填降级开关 |
-| `ANTI_ROUTE_SCRUB_SCOPE` | 否 | `leading` | 净化范围：`leading`（仅前导指令块）或 `all`（全部 system 文本） |
-| `ANTI_ROUTE_SEPARATOR` | 否 | `hyphen` | 拆词分隔符：`hyphen`（`-`）或 `wordjoiner`（U+2060） |
-| `ANTI_ROUTE_RULES_FILE` | 否 | 空 | 追加规则文件路径（JSON：`split_terms` / `scrub` / `replace`） |
-| `MODEL_REPORT` | 否 | `headers` | 模型识别结果回传方式：`off`、`headers`、`body`、`both` |
-| `MODEL_REPORT_KEY` | 否 | `helix_model` | `body` 回传时使用的字段名 |
-| `TEXT_MODEL_PATTERN` | 否 | - | 可选正则：自定义判定为文本对话模型并启用防截断保护的匹配规则 |
-| `NON_TEXT_MODEL_PATTERN` | 否 | - | 可选正则：自定义判定为生图/语音/嵌入模型并跳过合成包装直接透传的匹配规则 |
-| `MAX_REQUEST_BYTES` | 否 | `16777216` | 最大允许请求大小（字节，默认 16MB） |
-| `MAX_RESPONSE_BYTES` | 否 | `16777216` | 最大允许响应大小（字节，默认 16MB） |
-| `MAX_CONCURRENT_REQUESTS` | 否 | `1024` | 全局最大并发请求数 |
-| `MAX_CONCURRENT_REQUESTS_PER_KEY` | 否 | `64` | 单个下游 API Key 最大并发请求数 |
-| `REQUEST_QUEUE_TIMEOUT_MS`| 否 | `50` | 高并发下请求排队最大等待超时（毫秒） |
-| `STREAM_SIDE_BUFFER_BYTES`| 否 | `0` | 流式 Side Buffer 大小（默认 `0` 即极速直发，零额外延迟） |
-| `STREAM_HEARTBEAT_MS` | 否 | `15000` | 下游静默保活间隔（毫秒），超时无数据时补发 SSE 注释帧，`0` 关闭 |
-| `ADMIN_API_KEY` | 否 | `admin-secret-key-12345` | 多 Key 动态管理接口鉴权 Key（用于 `/admin/keys`，自定义时至少 8 字符） |
-| `KEY_HMAC_SECRET` | 否 | 内置默认密钥 | 下游 Key 的 HMAC-SHA256 安全签名密钥（自定义时至少 16 字符） |
-| `KEY_DB_PATH` | 否 | `./data/keys.sqlite` | 动态 Key 持久化存储 SQLite 数据库路径 |
-| `DOWNSTREAM_KEYS_JSON` | 否 | `[]` | 静态下游分发 Key 配置（JSON 数组，纯环境变量配置时使用） |
-| `SHUTDOWN_TIMEOUT_MS` | 否 | `30000` | 优雅关机超时时长（毫秒，默认 30 秒） |
-| `MODELS_CACHE_TTL_MS` | 否 | `30000` | `/v1/models` 上游模型列表缓存有效期（毫秒） |
-| `LOG_LEVEL` | 否 | `info` | 日志级别：`debug`、`info`、`warn`、`error` |
-| `TRUST_PROXY` | 否 | `false` | 是否信任反向代理传递的 `X-Forwarded-For` 真实客户端 IP |
-| `UPSTREAM_MAX_IDLE_CONNS` | 否 | `2048` | 上游 HTTP 连接池最大空闲连接数 |
-| `UPSTREAM_MAX_IDLE_CONNS_PER_HOST` | 否 | `512` | 每个上游 Host 最大空闲连接数 |
-| `UPSTREAM_MAX_CONNS_PER_HOST` | 否 | `512` | 每个上游 Host 最大并发连接数 |
-
-#### `.env` 配置文件示例 (直接复制项目中的 `.env.example` 修改)
 ```env
-# 必需：上游根地址与密钥
-UPSTREAM_BASE_URL=https://api.openai.com
-UPSTREAM_API_KEY=sk-your-upstream-key-here
-
-# [推荐] 下游客户端连接网关所使用的简易访问 Key (酒馆/客户端填写此 Key)
+UPSTREAM_BASE_URL=https://api.openai.com/v1
+UPSTREAM_API_KEY=sk-your-upstream-key
 API_KEY=sk-helix-123456
 PORT=8080
 HOST=0.0.0.0
 
-# 防截断策略配置
 WRAPPER_MODE=prefer
 RECOVERY_POLICY=repair
-UPSTREAM_EMPTY_RETRIES=3
+STREAM_HEARTBEAT_MS=15000
 
-# 日志级别
 LOG_LEVEL=info
 ```
 
-#### 🔀 请求形态随机化
-
-网关每次转发都会重新生成自身的传输外壳，使同一段对话在多次请求中呈现不同的线上形态：
-
-| 维度 | 变化内容 | 影响范围 |
-| :--- | :--- | :--- |
-| 合成工具名 | 由动词/名词池拼装，或按配置前缀追加 96-bit 随机串 | 网关自行声明的工具，不涉及客户端工具 |
-| 控制提示词 | 多条等价措辞模板 + 约束句随机组合 | 网关注入的指令文本 |
-| JSON 布局 | 键序随机排列，空白风格在紧凑/单空格/缩进间切换 | 仅编码形式，语义完全不变 |
-| 客户端指纹 | `User-Agent`、`Accept` 从真实浏览器池中抽取 | 出站请求头 |
-| 请求 ID | 前缀与随机段长度变化 | 链路追踪标识 |
-| 采样参数 | `temperature`、`top_p` 在 ±0.01 内浮动 | 仅在 `aggressive` 级别生效 |
-
-三点约束始终成立：下游对话内容不会被改写（包括 `messages`、`tools`、采样参数以外的字段）；随机化只作用于网关自身生成的脚手架；`ENTROPY_SEED` 可固定全部随机源，便于复现问题。
-
-需要回退到完全固定的旧形态时，设置 `ENTROPY_LEVEL=off` 即可：工具名回到 `agw_emit_` + 96-bit 随机串，控制提示词与 JSON 布局恢复为单一固定写法。
-
-
-#### 🧱 出站请求防路由
-
-部分上游会对请求体做内容分类，命中特定词表时静默降级或改路由。网关在传输层提供一道可逆的分级防护，只作用于出站字节形态，不改语义：
-
-| 级别 | 行为 | 还原 |
-| :--- | :--- | :--- |
-| `off` | 不追加任何处理 | - |
-| `wire` | 请求体中的非 ASCII 字符写为 `\uXXXX`（默认） | 上游解析后语义不变，无需还原 |
-| `standard` | `wire` + 前导指令块中的高风险词替换为等价表述 | 只改写网关自身可见的指令文本 |
-| `deep` | `standard` + 词表中性词拆分掩码（`甲-乙`），可选把末尾 `assistant` 预填降级为 `user` | 响应中的掩码形态在转发前还原为原词 |
-
-约束：掩码不改变对话语义；拆分位置由加密随机决定，不受 `ENTROPY_SEED` 影响；`ANTI_ROUTE_RULES_FILE` 以 JSON 追加规则（`{"split_terms": [...], "scrub": {"原文": "替换"}, "replace": false}`，`replace: true` 时整体替换默认规则）。
-
-流式响应按事件解码后逐段还原，跨越两个事件的掩码词同样能拼接回来；无法识别的非 SSE 行按原样透传。
-
-#### 🏷️ 模型识别回传
-
-网关会综合请求字段、上游响应体与响应头解析本次实际命中的模型，并按 `MODEL_REPORT` 回传给下游：
-
-| 回传方式 | 内容 |
-| :--- | :--- |
-| `headers`（默认） | `X-AGW-Model`、`X-AGW-Model-Family`、`X-AGW-Model-Version`、`X-AGW-Model-Capabilities`、`X-AGW-Model-Source`、`X-AGW-Route` |
-| `body` | 响应 JSON 中追加 `helix_model` 对象（`model` / `family` / `version` / `capabilities` / `source` / `route` / `requested`），字段名可由 `MODEL_REPORT_KEY` 调整 |
-| `both` | 同时输出上述两者 |
-
-`source` 说明识别来源：`request`（请求字段）、`response-body`（响应体）、`response-header`（响应头）、`response-stream`（流式首个事件）、`fallback`（上游未回传时的兜底）。流式请求会在提交响应头之前预读首个事件完成识别，随后原样回放，不改变流式时序。
+完整模板见 `.env.example`。
 
 ---
 
-### 🚀 部署与运行方式
+## 部署
 
-#### 方式 1：Windows 一键批处理 (`run.bat`)
-在发布包中已内置智能优化的 `run.bat`，直接双击运行即可：
-- 自动检测同级目录的 `.env` 文件；
-- 若无 `.env` 且无环境变量，会自动从 `.env.example` 复制生成 `.env` 并友好引导配置；
-- 若运行异常退出，会保留窗口并提示具体排查步骤（如检查端口占用、Key 是否填写等）。
+### Windows
 
-#### 方式 2：Linux / macOS 命令行直接启动
-将 `.env.example` 复制为 `.env` 并填写好配置，直接运行：
-```bash
-cp .env.example .env
-# 编辑配置
-nano .env
+发布包内有 `run.bat`，双击即可。它会自动检查同级目录的 `.env`，缺失时从 `.env.example` 复制一份并提示填写；进程异常退出时保留窗口并给出排查方向。
 
-# 启动运行
-./gateway
-```
-或直接通过命令行环境变量覆盖启动：
-```bash
-export UPSTREAM_BASE_URL="https://your-upstream-domain.com"
-export UPSTREAM_API_KEY="sk-your-upstream-key"
-export API_KEY="sk-helix-123456"
-export PORT="8080"
+### systemd
 
-./gateway
-```
+`/etc/systemd/system/helix-gateway.service`：
 
-#### 方式 3：Linux Systemd 守护进程部署
-创建 systemd 服务文件 `/etc/systemd/system/helix-gateway.service`：
 ```ini
 [Unit]
-Description=Helix Gateway Service
+Description=Helix Gateway
 After=network.target
 
 [Service]
 Type=simple
-User=root
+User=helix
 WorkingDirectory=/opt/helix-gateway
-ExecStart=/opt/helix-gateway/gateway
-Restart=always
-RestartSec=5
-# 既可使用 Environment 指定，也可直接在 WorkingDirectory 下放置 .env 文件
-Environment=UPSTREAM_BASE_URL=https://your-upstream-domain.com
-Environment=UPSTREAM_API_KEY=sk-your-upstream-key
-Environment=API_KEY=sk-helix-123456
-Environment=PORT=8080
-Environment=HOST=0.0.0.0
+EnvironmentFile=/opt/helix-gateway/.env
+ExecStart=/opt/helix-gateway/helix-gateway
+Restart=on-failure
+RestartSec=3
 
 [Install]
 WantedBy=multi-user.target
 ```
-启动并开机自启：
+
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable --now helix-gateway
-sudo systemctl status helix-gateway
+journalctl -u helix-gateway -f
 ```
 
-#### 方式 4：Docker / Docker Compose 部署
-使用 `docker run` 快速启动：
+### Docker
+
 ```bash
-docker run -d \
-  --name helix-gateway \
+docker build -t helix-gateway .
+docker run -d --name helix-gateway \
   -p 8080:8080 \
-  -e UPSTREAM_BASE_URL="https://your-upstream-domain.com" \
+  -e UPSTREAM_BASE_URL="https://api.openai.com/v1" \
   -e UPSTREAM_API_KEY="sk-your-upstream-key" \
-  -e API_KEY="sk-helix-123456" \
-  --restart unless-stopped \
-  helix-gateway:latest
+  -e API_KEY="sk-helix-local" \
+  helix-gateway
 ```
 
-或使用 `docker-compose.yml`：
-```yaml
-version: '3.8'
+`KEY_DB_PATH` 指向的 SQLite 文件需要挂载卷才能跨重启保留动态 Key。
 
-services:
-  gateway:
-    build: .
-    container_name: helix-gateway
-    ports:
-      - "8080:8080"
-    environment:
-      - UPSTREAM_BASE_URL=https://your-upstream-domain.com
-      - UPSTREAM_API_KEY=sk-your-upstream-key
-      - API_KEY=sk-helix-123456
-      - PORT=8080
-    restart: unless-stopped
-```
+### 反向代理
 
----
+nginx 放在网关前面时，流式响应必须关掉缓冲并把读超时拉长：
 
-### 🔑 多用户动态 Key 管理 API
-
-网关内置了多用户 API Key 管理引擎（支持 SQLite 存储与不可变内存快速鉴权），管理员可以通过 `/admin/keys` 接口进行自动化签发与吊销。
-
-#### 1. 创建新下游 Key
-```bash
-curl -X POST http://127.0.0.1:8080/admin/keys \
-  -H "Authorization: Bearer admin-secret-key-12345" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "User-Alice",
-    "allowed_models": ["gemini-3.5-flash-low", "gpt-4o"]
-  }'
-```
-响应示例：
-```json
-{
-  "id": "key_7f8a91b2c3d4",
-  "key": "sk-agw-live-a1b2c3d4e5f6...",
-  "name": "User-Alice",
-  "allowed_models": ["gemini-3.5-flash-low", "gpt-4o"],
-  "status": "active",
-  "created_at": "2026-09-03T01:00:00Z"
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:8080;
+    proxy_http_version 1.1;
+    proxy_set_header Connection "";
+    proxy_buffering off;
+    proxy_cache off;
+    proxy_read_timeout 3600s;
+    proxy_send_timeout 3600s;
 }
 ```
 
-#### 2. 列出所有 Key
-```bash
-curl -s http://127.0.0.1:8080/admin/keys \
-  -H "Authorization: Bearer admin-secret-key-12345"
-```
-
-#### 3. 吊销特定 Key
-```bash
-curl -X POST http://127.0.0.1:8080/admin/keys/key_7f8a91b2c3d4/revoke \
-  -H "Authorization: Bearer admin-secret-key-12345"
-```
+`proxy_buffering off` 少了这一行，流式会被 nginx 攒成一次性响应。网关的 `: keep-alive` 心跳只能防止 `proxy_read_timeout` 切断，救不了缓冲。
 
 ---
 
-### 📱 客户端接入实战
+## 多 Key 管理 API
 
-网关完全兼容标准 OpenAI `/v1` 协议端点。
+需要请求头 `Authorization: Bearer <ADMIN_API_KEY>`。
 
-#### 1. 通用连接参数
-- **API 接口地址 (Base URL)**: `http://127.0.0.1:8080/v1`（局域网/公网部署请替换为对应 IP 或域名）
-- **API 密钥 (API Key)**: 填入网关中配置的 `API_KEY` 或 `DOWNSTREAM_KEYS_JSON` 中的有效 Key；网关的 `/v1/*` 接口始终要求 Bearer Key，未配置任何下游 Key 时不会变成免认证模式。
-- **模型名称**: 填入上游支持的原生模型（如 `gemini-3.5-flash-low`, `gemini-3.7-flash-high`, `claude-sonnet-4-6` 等）
-
-#### 2. SillyTavern (酒馆) 设置
-1. 打开酒馆 API 设置面板，选择 **API**: `Chat Completion (OpenAI Compatible)`；
-2. **Custom Endpoint (自定义端点)**: `http://127.0.0.1:8080/v1`；
-3. **API Key**: 输入你的 `API_KEY`；
-4. 点击 **Connect (连接)**，在下拉列表中选择你的目标模型即可畅快游玩，彻底告别回答截断与轮次 400 报错。
-
-#### 3. Cherry Studio / NextChat / Chatbox 设置
-- **提供商类型**: OpenAI / OpenAI 兼容
-- **API 地址**: `http://127.0.0.1:8080/v1`
-- **API Key**: `sk-helix-123456`
-
-#### 4. cURL 快速测试验证
-- **测试模型列表获取**:
-  ```bash
-  curl -s -H "Authorization: Bearer sk-helix-123456" http://127.0.0.1:8080/v1/models
-  ```
-- **测试对话流式输出 (SSE)**:
-  ```bash
-  curl http://127.0.0.1:8080/v1/chat/completions \
-    -H "Authorization: Bearer sk-helix-123456" \
-    -H "Content-Type: application/json" \
-    -d '{
-      "model": "gemini-3.5-flash-low",
-      "messages": [{"role": "user", "content": "你好，请写一段500字的故事。"}],
-      "stream": true
-    }'
-  ```
-
----
-
-### 🛡️ 运维监控与健康检查
-
-- **存活探针 (Liveness)**: `GET /healthz` → 返回 `{"status":"ok","version":"2.0.0"}` (200 OK)
-- **就绪探针 (Readiness)**: `GET /readyz` → 返回 `{"status":"ready","version":"2.0.0"}` (200 OK)
-- **Prometheus 监控指标**: `GET /metrics` → 输出请求总量、活跃请求数、过载拒绝、合成包装命中/修复/重试/冲突等指标。
-- **紧急回滚**: 若遇到突发未知上游格式异常，修改 `.env` 中的 `WRAPPER_MODE=off` 并重启网关，即可切换为原生纯透传模式。
-
----
-
-### 🗂️ 项目结构
-
-```text
-Helix-gateway/
-├── cmd/
-│   ├── gateway/          # 服务端入口（CLI，多平台二进制）
-│   ├── androidbridge/    # JNI 桥接层（编译为 libhelix.so）
-│   └── live_test/        # 端到端联调客户端
-├── internal/             # 防截断核心：请求改写、流式拼接、重试与熔断
-├── pkg/                  # 可复用库：上游适配、日志、配置加载
-├── android/              # Android 工程（Kotlin + Gradle）
-│   └── app/src/main/java/org/helix/gateway/
-│       ├── GatewayApplication.kt   # 启动流程（主题、崩溃采集、安全模式）
-│       ├── bridge/                 # JNI 调用封装（Go 核心）
-│       ├── data/                   # 配置模型、Keystore 加密、主题偏好
-│       ├── net/                    # 网关自检客户端（拉取模型 / 消息测试）
-│       ├── service/                # 前台服务（后台保活）
-│       ├── ui/                     # 单屏主界面（Activity / ViewModel）
-│       └── util/                   # 崩溃日志采集、网络工具
-├── .github/workflows/    # CI：Android 构建 + 多平台 Release 发布
-└── Dockerfile            # 服务端容器化部署
-```
-
-### 📦 版本与发布流程
-
-- **版本号**同时写入 4 处并保持一致：`android/app/build.gradle.kts`（`versionCode`/`versionName`）、`cmd/gateway/main.go`、`internal/*/engine.go`、本 README。
-- 推送形如 `v2.0.0` 的 **标签** 即触发 `.github/workflows/release.yml`：
-  1. 编译 Android APK（debug/release 双构建 + 单元测试 + lint）；
-  2. 交叉编译 6 个服务端二进制（Linux/Windows/macOS × amd64/arm64）；
-  3. 通过 `ldflags -X main.Version=<tag>` 把版本号与 commit SHA 注入二进制；
-  4. 上传全部产物 + `checksums.txt`（SHA-256）到 GitHub Release。
-- **校验发布产物**：
-
-```bash
-gh release view v2.0.0                                   # 资产列表
-sha256sum -c checksums.txt                                # 校验下载文件
-helix-gateway --version                             # v2.0.0 (commit: ...)
-aapt2 dump badging helix-gateway-v2.0.0.apk | head -1   # APK 版本
-```
-
-- **升级约定**：已发布版本不再修改；每个变更批次递增补丁号并重新走完整验证（单元测试 → 真机/模拟器用例 → 发布校验）。
-
----
-
-### ❓ 常见问题排查 (FAQ)
-
-#### Q1: 为什么会出现 400 "Requests ending with a model turn are not supported"?
-**A**: 这是 Google Gemini / CPA 上游的特定限制，原生接口要求对话内容必须以 `user` 角色结尾。网关已内置智能轮次闭环机制，会自动将尾部悬空的 Assistant 预填或系统提示词自适应修正为 User 轮次，避免触发上游报错。
-
-#### Q2: 遇到模型拒答（如“抱歉，我无法生成该内容”）是网关问题吗？
-**A**: 不是。模型拒答分为两种：
-1. **外审拦截**（返回 `finish_reason: "SAFETY"` 或 HTTP 400）；
-2. **内审拒答**（模型本身回复道歉文本，返回 `role: "assistant"`，`status: 200`）。
-如果是内审拒答，说明提示词命中了模型的关键词红线，建议调整人物设定或选用对齐规则更宽松/带有 Thinking 链的模型。
-
-#### Q3: 网关支持非文本模型（如生图/声音）吗？
-**A**: 完全支持。网关内置了智能正则过滤器，检测到生图、图像分析、音频等模型时会自动跳过合成包装，执行 100% 原生透传。
-
-#### Q4: 为什么我在 `.env` 文件里修改了配置却不生效？
-**A**: 网关自 `v1.0.7` 起已原生支持 `.env` 文件解析。请确认：
-1. 操作系统环境变量中是否已设置了同名变量（系统环境变量优先级高于 `.env` 文件）；
-2. 启动时注意观察首行日志 `loaded configuration from .env file (path: ...)`，查看网关实际加载的 `.env` 文件绝对路径；
-3. 如果使用 Windows，推荐直接使用包内自带的 `run.bat`，它会自动保障读取脚本同级目录下的 `.env`。
-
----
-
-<a name="english"></a>
-## 🇬🇧 English Documentation
-
-### Overview
-
-**Helix Gateway for Android** (`org.helix.gateway`) is a standalone, lightweight Android application delivering an embedded OpenAI Chat Completions anti-truncation proxy gateway.
-
-By embedding the high-performance Go native core (`libhelix.so`) via JNI, the app acts as a local proxy on your Android phone, tablet, emulator, or head unit. It completely resolves truncation, missing code block enclosures, and Gemini/CPA trailing turn 400 errors for clients such as **SillyTavern, Cherry Studio, and NextChat**.
-
----
-
-### 🚀 Quick Start
-
-#### Option A — Android (end users)
-
-1. Download `helix-gateway-v<version>.apk` (currently `v2.0.0`) from [Releases](https://github.com/Xeltra233/Helix-gateway/releases/latest).
-2. Install it (allow "install from unknown sources" the first time).
-3. Open the app → tap **切换/新建** to add an upstream provider: base URL (e.g. `https://api.openai.com/v1`) and your upstream API key.
-4. Tap **启动网关** and wait for the status card to show **网关运行中**.
-5. Copy the displayed endpoint (`http://192.168.x.x:38472/v1`) and access key (`sk-agw-...`) into your client.
-6. Verify with the built-in **拉取模型 / 消息测试** buttons, then chat normally.
-
-> Keys stay on the device (encrypted with Android Keystore); requests go straight from the phone to your upstream.
-
-#### Option B — Server deployment (Linux / Windows / macOS)
-
-```bash
-go build -o helix-gateway ./cmd/gateway
-
-export UPSTREAM_BASE_URL="https://api.openai.com/v1"
-export UPSTREAM_API_KEY="<your upstream key>"
-export GATEWAY_API_KEY="sk-agw-local"        # what your clients send
-
-./helix-gateway --port 38472
-
-curl http://127.0.0.1:38472/healthz
-curl http://127.0.0.1:38472/v1/models -H "Authorization: Bearer sk-agw-local"
-```
-
-See [Configuration & Environment Variables](#️-configuration--environment-variables) and [Dynamic Multi-Key Management API](#-dynamic-multi-key-management-api) for the full surface.
-
----
-
-### 🧭 Compatibility Matrix
-
-| Dimension | Supported | Notes |
+| 方法 | 路径 | 用途 |
 | --- | --- | --- |
-| Android | **8.0 (API 26) – 15** | `minSdk 26`, `targetSdk 34`; API 28 emulator verified for runtime behaviour |
-| ABIs | `arm64-v8a`, `x86_64`, `armeabi-v7a`, `x86` | All four `libhelix.so` variants ship inside the APK |
-| Theme | Light / Dark / Follow system | Top-right switcher; dark mode uses a dedicated palette, not an inverted one |
-| Crash reports | Private dir + `Android/data/<pkg>/files/crash-logs` (≤ Android 10) + `Download/HelixGateway/` (Android 11+) | See [Crash Reports & Safe Mode](#-crash-reports--safe-mode) |
-| Binaries | Linux (amd64/arm64), Windows (amd64), macOS (amd64/arm64) | Published per release, versioned in lockstep with the APK |
-| Upstream | OpenAI Chat Completions (`/v1/models`, `/v1/chat/completions`) | Works with OpenAI, DeepSeek, Gemini-compatible layers, CPA, self-hosted relays |
-| Clients | SillyTavern, Cherry Studio, NextChat, OpenAI SDKs | Custom base URL + bearer key only |
-
----
-
-### 🌟 Key Features
-9. **Light / Dark / System Theme**: one-tap switcher in the top bar; dark mode uses a dedicated palette (background #121212, surface #1E1E1E, text #ECECEC) instead of an inverted one.
-10. **Self-Diagnosing Crash Pipeline**: uncaught exceptions are persisted automatically (private dir + app-external dir + public Downloads on Android 11+), with in-app view / copy / share / clear and a safe mode for repeated startup failures.
-
-1. **Minimal Single-Screen UI**: Clean Material interface designed specifically for mobile devices.
-2. **Multi-Provider Switcher & Rename**: Add, switch, and rename providers (via ✏️ icon or long-press) with deletion safety for the default provider.
-3. **Global Downstream Key**: Auto-generated high-entropy `sk-agw-...` key independent of upstream provider selections.
-4. **Android Keystore AES-GCM Encryption**: Hardware-backed credential encryption preventing sensitive API keys from leaking into logs or storage.
-5. **Fixed Cold Port & LAN Detection**: Fixed cold port `38472` with auto-detected LAN link (`http://<LAN-IP>:38472/v1`).
-6. **Foreground Service Keep-Alive**: Persistent notification keeps the proxy running in the background; swiping the app away from recent tasks automatically shuts down the gateway and frees the port.
-7. **Built-in Verification Client**: In-app `GET /v1/models` and `POST /v1/chat/completions` testing with auto-fill for the first available model.
-8. **Multi-ABI Support**: Packaged with native libraries for `arm64-v8a`, `x86_64`, `armeabi-v7a`, and `x86`.
-
----
-
-### 📱 UI & Usage Guide
-
-1. **Configure Provider**: Select or add a provider, rename if needed, and enter the upstream URL and Key.
-2. **Downstream Key**: Generate or copy the global downstream key.
-3. **Start Gateway**: Tap **Start**, then copy the displayed App URL (`http://<IP>:38472/v1`).
-4. **Client Setup**: Configure your client (e.g. SillyTavern) with the App URL as Base URL, the Downstream Key as API Key, and your chosen model name.
-
----
-
-### 🩺 Crash Reports & Safe Mode
-
-OEM ROMs (MIUI / HyperOS / EMUI …) occasionally kill the app right after launch, and a non-technical user has no way to retrieve a log. The app therefore ships a self-diagnostic pipeline.
-
-#### 1. Where reports are written
-
-The same report is written to several locations so that every Android version has at least one reachable copy:
-
-| Location | Path | When it is usable |
-| --- | --- | --- |
-| Private app dir | `/data/data/org.helix.gateway/files/crash-logs/` | Read by the in-app viewer; over ADB only with root/`run-as` |
-| App-external dir | `/sdcard/Android/data/org.helix.gateway/files/crash-logs/` | **Android 10 and below**: file managers, MTP, `adb pull` |
-| Public Downloads | `/sdcard/Download/HelixGateway/` | **Android 11+**: system file manager, chat apps, `adb pull` — written through MediaStore, no storage permission required |
-
-Each report contains timestamp, app version, device model, Android version, ABIs, thread name and the full stack trace. Only the newest 5 files are kept per location; older ones are deleted automatically.
-
-#### 2. In-app view / share / clear
-
-The **查看崩溃日志** button (visible only when reports exist, with a count badge) opens a dialog offering:
-
-- full report text plus the location list above;
-- **复制** — copy the whole report;
-- **分享** — system share sheet (WeChat, mail, anything);
-- **清除** — deletes every report from all three locations.
-
-#### 3. Safe mode
-
-Every launch is counted. If **3 consecutive** launches fail to reach the UI (e.g. a ROM-specific failure during theme setup), the next launch enters **safe mode**:
-
-- theme and other optional initialisation are skipped so the dashboard can always come up;
-- a banner reports "安全模式：检测到连续 N 次启动未成功…" and the crash-log entry is forced visible;
-- the counter resets as soon as the dashboard is shown, so the next normal launch leaves safe mode automatically.
-
-#### 4. Manual capture
+| `POST` | `/admin/keys` | 创建下游 Key |
+| `GET` | `/admin/keys` | 列出全部 Key |
+| `POST` | `/admin/keys/{id}/revoke` | 吊销指定 Key |
 
 ```bash
-adb logcat -s CrashReporter:I AndroidRuntime:E              # live crash records
-adb pull /sdcard/Download/HelixGateway/ ./crash-logs/  # Android 11+
-adb pull /sdcard/Android/data/org.helix.gateway/files/crash-logs/ ./crash-logs/  # Android ≤ 10
-```
-
----
-
-### ⚙️ Technical Architecture & Security
-
-- **Native JNI Engine**: Core routing, synthetic transport protocol, and streaming state machine execute natively via `libhelix.so`.
-- **In-Memory SQLite**: The Android bridge initializes SQLite with `:memory:` to ensure no plaintext key residue exists on disk.
-- **Keystore Encryption**: All credentials stored in `ConfigRepository` are encrypted with AES-256-GCM using keys generated inside the Android Keystore.
-
----
-
-### 🛠️ Build from Source
-
-```bash
-cd android
-./gradlew :app:testReleaseUnitTest
-./gradlew :app:assembleRelease
-# Output APK: android/app/build/outputs/apk/release/helix-gateway-v2.0.0.apk
-```
-
----
-
-#### Option C: Build from Source (Requires Go 1.25+)
-
-##### 1. Install Go (if not installed)
-- **Windows**: In PowerShell run `winget install GoLang.Go` or download from [Go Downloads](https://go.dev/dl/).
-- **Ubuntu / Debian**: `sudo apt update && sudo apt install -y golang`
-- **macOS**: `brew install go`
-
-##### 2. Clone & Compile
-```bash
-git clone https://github.com/Xeltra233/Helix-gateway.git
-cd Helix-gateway
-
-# Native compilation
-go build -trimpath -ldflags="-s -w" -o gateway ./cmd/gateway
-
-# Print version
-./gateway -v
-```
-
-##### 3. Cross-Compilation
-```bash
-# Target Linux AMD64 from Windows/macOS
-CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o gateway-linux-amd64 ./cmd/gateway
-
-# Target Windows from Linux/macOS
-CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o gateway.exe ./cmd/gateway
-```
-
----
-
-### ⚙️ Configuration & Environment Variables
-
-The gateway follows 12-Factor App design principles and reads configuration following this precedence hierarchy:
-1. **Operating System / Shell Environment Variables** (highest priority);
-2. **File specified via `ENV_FILE`** environment variable;
-3. **`.env` in current working directory**;
-4. **`.env` in executable directory** (essential for Windows double-clicking or service auto-start);
-5. **`../.env` in parent directory**.
-
-#### Complete Environment Variables Reference
-
-| Variable | Required | Default | Description |
-| :--- | :---: | :--- | :--- |
-| **`UPSTREAM_BASE_URL`** | **Yes** | - | Upstream API base URL (e.g., `https://api.openai.com` or custom reverse proxy, `/v1` normalized automatically) |
-| **`UPSTREAM_API_KEY`** | Conditional | - | Upstream Bearer API key (required when `UPSTREAM_AUTH_MODE=bearer`) |
-| `UPSTREAM_AUTH_MODE` | No | `bearer` | Upstream authentication mode: `bearer` or `none` |
-| `UPSTREAM_TIMEOUT_MS` | No | `120000` | Upstream request timeout in milliseconds (default: 2 minutes) |
-| `PORT` | No | `8080` | Gateway listening port |
-| `HOST` | No | `0.0.0.0` | Gateway listening host interface |
-| `API_KEY` | Conditional | - | Downstream client access key (**Recommended**). Provide either this or keys in `DOWNSTREAM_KEYS_JSON`; `/v1/*` strictly requires a valid Bearer key. |
-| `ENV_FILE` | No | - | Custom path to load `.env` configuration file from |
-| `WRAPPER_MODE` | No | `prefer` | Wrapper mode: `prefer` (recommended, injects synthetic protocol), `required` (strict), `off` (emergency passthrough) |
-| `RECOVERY_POLICY` | No | `repair` | Recovery policy: `repair` (local deterministic fix), `repair_then_retry` (retry on failure), `fail` (error out) |
-| `UPSTREAM_EMPTY_RETRIES` | No | `3` | Number of automatic retries upon receiving empty responses from upstream |
-| `CONTROL_MESSAGE_ROLE` | No | `system` | Injected control message role: `system` or `developer` |
-| `CONTROL_MESSAGE_POSITION`| No | `tail` | Injected message position: `tail` (recommended for strong adherence), `head`, `system_tail` |
-| `SYNTHETIC_TOOL_PREFIX` | No | empty (random name) | Fixed tool-name prefix; leave empty to let the entropy source assemble the name, otherwise `prefix + 96-bit nonce` |
-| `SYNTHETIC_TOOL_STRICT` | No | `false` | Whether to send strict schema validation constraint in tool definition |
-| `ENTROPY_LEVEL` | No | `standard` | Request-shape randomization strength: `off`, `light` (identifiers + JSON layout), `standard` (layout + wording), `aggressive` (adds invisible separators and sampling jitter) |
-| `ENTROPY_LAYOUT` | No | per `ENTROPY_LEVEL` | Overrides JSON key-order and whitespace randomization |
-| `ENTROPY_INVISIBLE` | No | per `ENTROPY_LEVEL` | Overrides zero-width separators in gateway-authored instruction text only |
-| `ENTROPY_PARAM_JITTER` | No | per `ENTROPY_LEVEL` | Overrides sampling jitter (`temperature` and `top_p` within ±0.01, clamped to valid ranges) |
-| `ENTROPY_SEED` | No | random | Fixed random seed for reproducing an issue; leave empty in production |
-| `ANTI_ROUTE_LEVEL` | No | `wire` | Outbound anti-routing level: `off`, `wire` (non-ASCII escaping), `standard` (adds instruction-block scrubbing), `deep` (adds term masking with response-side restore) |
-| `ANTI_ROUTE_WIRE_ESCAPE` | No | per `ANTI_ROUTE_LEVEL` | Overrides `\uXXXX` escaping |
-| `ANTI_ROUTE_SCRUB` | No | per `ANTI_ROUTE_LEVEL` | Overrides instruction-block scrubbing |
-| `ANTI_ROUTE_SPLIT` | No | per `ANTI_ROUTE_LEVEL` | Overrides reversible term masking |
-| `ANTI_ROUTE_DEMOTE_PREFILL` | No | per `ANTI_ROUTE_LEVEL` | Overrides demoting a trailing assistant prefill to a user message |
-| `ANTI_ROUTE_SCRUB_SCOPE` | No | `leading` | Scrub scope: `leading` (leading instruction block) or `all` |
-| `ANTI_ROUTE_SEPARATOR` | No | `hyphen` | Mask separator: `hyphen` (`-`) or `wordjoiner` (U+2060) |
-| `ANTI_ROUTE_RULES_FILE` | No | empty | Extra rules file (JSON: `split_terms` / `scrub` / `replace`) |
-| `MODEL_REPORT` | No | `headers` | How the identified model is reported: `off`, `headers`, `body`, `both` |
-| `MODEL_REPORT_KEY` | No | `helix_model` | Field name used for the `body` report |
-| `TEXT_MODEL_PATTERN` | No | - | Optional regex override to classify models as text/chat models |
-| `NON_TEXT_MODEL_PATTERN` | No | - | Optional regex override to classify models as non-text (vision/audio/embedding) to skip wrapper |
-| `MAX_REQUEST_BYTES` | No | `16777216` | Maximum allowed request size in bytes (default: 16MB) |
-| `MAX_RESPONSE_BYTES` | No | `16777216` | Maximum allowed response size in bytes (default: 16MB) |
-| `MAX_CONCURRENT_REQUESTS` | No | `1024` | Global maximum concurrent requests |
-| `MAX_CONCURRENT_REQUESTS_PER_KEY` | No | `64` | Maximum concurrent requests per API key |
-| `REQUEST_QUEUE_TIMEOUT_MS`| No | `50` | Maximum queue wait time before timeout (milliseconds) |
-| `STREAM_SIDE_BUFFER_BYTES`| No | `0` | Streaming side buffer size (default: 0 for instant emission) |
-| `STREAM_REPAIR_BUFFER_BYTES`| No | `1048576` | Streaming repair buffer size (default: 1MB) |
-| `STREAM_FLUSH_INTERVAL_MS`| No | `0` | Streaming flush interval in milliseconds |
-| `ADMIN_API_KEY` | No | `admin-secret-key-12345` | Authentication key for dynamic key management endpoint (`/admin/keys`, min 8 chars) |
-| `KEY_HMAC_SECRET` | No | Built-in secret | HMAC-SHA256 signature secret for downstream keys (min 16 chars) |
-| `KEY_DB_PATH` | No | `./data/keys.sqlite` | SQLite database path for persistent downstream keys |
-| `DOWNSTREAM_KEYS_JSON` | No | `[]` | Static downstream keys array in JSON format |
-| `SHUTDOWN_TIMEOUT_MS` | No | `30000` | Graceful shutdown timeout in milliseconds |
-| `MODELS_CACHE_TTL_MS` | No | `30000` | Upstream `/v1/models` cache TTL in milliseconds |
-| `LOG_LEVEL` | No | `info` | Logging verbosity level: `debug`, `info`, `warn`, `error` |
-| `TRUST_PROXY` | No | `false` | Trust `X-Forwarded-For` header from reverse proxies |
-| `UPSTREAM_MAX_IDLE_CONNS` | No | `2048` | Maximum idle connections in HTTP transport pool |
-| `UPSTREAM_MAX_IDLE_CONNS_PER_HOST` | No | `512` | Maximum idle connections per upstream host |
-| `UPSTREAM_MAX_CONNS_PER_HOST` | No | `512` | Maximum total connections per upstream host |
-
-#### `.env` File Example
-```env
-# Required: Upstream URL and Key
-UPSTREAM_BASE_URL=https://api.openai.com
-UPSTREAM_API_KEY=sk-your-upstream-key-here
-
-# Recommended: Downstream client access key (Input this into SillyTavern / client)
-API_KEY=sk-helix-123456
-PORT=8080
-HOST=0.0.0.0
-
-# Anti-truncation strategy
-WRAPPER_MODE=prefer
-RECOVERY_POLICY=repair
-UPSTREAM_EMPTY_RETRIES=3
-
-# Logging
-LOG_LEVEL=info
-```
-
-#### 🔀 Request Shape Randomization
-
-Every forwarded request rebuilds the gateway's own transport shell, so the same conversation presents a different wire shape across turns:
-
-| Dimension | What changes | Scope |
-| :--- | :--- | :--- |
-| Synthetic tool name | Assembled from verb/noun pools, or configured prefix plus a 96-bit nonce | Gateway-declared tool only; client tools untouched |
-| Control prompt | Equivalent wording templates combined with randomized constraint clauses | Gateway-injected instruction text |
-| JSON layout | Key order permuted; whitespace switches between compact / spaced / indented | Encoding only — semantics unchanged |
-| Client fingerprint | `User-Agent` and `Accept` drawn from a real browser pool | Outbound request headers |
-| Request ID | Prefix and random segment length vary | Trace identifier |
-| Sampling params | `temperature` and `top_p` move within ±0.01 | `aggressive` level only |
-
-Three invariants always hold: downstream conversation content is never rewritten (outside `messages`, `tools`, and the sampling fields); randomization touches only scaffolding the gateway itself generates; `ENTROPY_SEED` pins every random source for reproducible debugging.
-
-Set `ENTROPY_LEVEL=off` to return to the fully fixed legacy shape: tool names fall back to `agw_emit_` plus a 96-bit nonce, and the control prompt and JSON layout collapse to a single fixed form.
-
-
-#### 🧱 Outbound anti-routing
-
-Some upstreams classify request bodies and silently downgrade or reroute traffic that hits a term list. The gateway offers a reversible, tiered guard that only changes the outbound byte shape, never the meaning:
-
-| Level | Behaviour | Restore |
-| :--- | :--- | :--- |
-| `off` | No extra processing | - |
-| `wire` | Non-ASCII characters in the body are written as `\uXXXX` (default) | Semantics are unchanged once parsed; nothing to restore |
-| `standard` | `wire` plus high-risk words in the leading instruction block replaced with equivalent wording | Only the instruction text the gateway itself exposes is touched |
-| `deep` | `standard` plus neutral-term masking (`a-b`), optionally demoting a trailing assistant prefill to `user` | Masked forms in the response are restored before the client sees them |
-
-Constraints: masking never changes what the conversation means; split positions come from cryptographic randomness and are not affected by `ENTROPY_SEED`; `ANTI_ROUTE_RULES_FILE` appends rules as JSON (`{"split_terms": [...], "scrub": {"source": "replacement"}, "replace": false}`; `replace: true` swaps the defaults out entirely).
-
-Streaming responses are restored per decoded event, so a masked term spanning two events is still reassembled; lines the gateway cannot recognise are passed through untouched.
-
-#### 🏷️ Model reporting
-
-The gateway resolves the model actually served from the request fields, the response body and the response headers, then reports it according to `MODEL_REPORT`:
-
-| Mode | Content |
-| :--- | :--- |
-| `headers` (default) | `X-AGW-Model`, `X-AGW-Model-Family`, `X-AGW-Model-Version`, `X-AGW-Model-Capabilities`, `X-AGW-Model-Source`, `X-AGW-Route` |
-| `body` | an `helix_model` object in the response JSON (`model` / `family` / `version` / `capabilities` / `source` / `route` / `requested`), renameable via `MODEL_REPORT_KEY` |
-| `both` | Both of the above |
-
-`source` states where the value came from: `request`, `response-body`, `response-header`, `response-stream` (first stream event) or `fallback`. Streaming requests peek the first event before committing response headers, then replay it byte for byte, so stream timing is unchanged.
-
----
-
-### 🚀 Deployment Methods
-
-#### Method 1: Windows Batch Script (`run.bat`)
-Double-click `run.bat` included in the release package:
-- Automatically loads configuration from `.env` in the same directory;
-- If `.env` is absent and no environment variables are detected, automatically copies `.env.example` to `.env` and guides setup;
-- Pauses with troubleshooting guidance upon any exit error.
-
-#### Method 2: Linux / macOS CLI
-```bash
-cp .env.example .env
-nano .env
-
-./gateway
-```
-Or start directly via exported environment variables:
-```bash
-export UPSTREAM_BASE_URL="https://your-upstream-domain.com"
-export UPSTREAM_API_KEY="sk-your-upstream-key"
-export API_KEY="sk-helix-123456"
-export PORT=8080
-
-./gateway
-```
-
-#### Method 3: Linux Systemd Service
-Create `/etc/systemd/system/helix-gateway.service`:
-```ini
-[Unit]
-Description=Helix Gateway Service
-After=network.target
-
-[Service]
-Type=simple
-User=root
-WorkingDirectory=/opt/helix-gateway
-ExecStart=/opt/helix-gateway/gateway
-Restart=always
-RestartSec=5
-Environment=UPSTREAM_BASE_URL=https://your-upstream-domain.com
-Environment=UPSTREAM_API_KEY=sk-your-upstream-key
-Environment=API_KEY=sk-helix-123456
-Environment=PORT=8080
-Environment=HOST=0.0.0.0
-
-[Install]
-WantedBy=multi-user.target
-```
-Enable and start the service:
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now helix-gateway
-sudo systemctl status helix-gateway
-```
-
-#### Method 4: Docker / Docker Compose
-Run via Docker CLI:
-```bash
-docker run -d \
-  --name helix-gateway \
-  -p 8080:8080 \
-  -e UPSTREAM_BASE_URL="https://your-upstream-domain.com" \
-  -e UPSTREAM_API_KEY="sk-your-upstream-key" \
-  -e API_KEY="sk-helix-123456" \
-  --restart unless-stopped \
-  helix-gateway:latest
-```
-
-Or via `docker-compose.yml`:
-```yaml
-version: '3.8'
-
-services:
-  gateway:
-    build: .
-    container_name: helix-gateway
-    ports:
-      - "8080:8080"
-    environment:
-      - UPSTREAM_BASE_URL=https://your-upstream-domain.com
-      - UPSTREAM_API_KEY=sk-your-upstream-key
-      - API_KEY=sk-helix-123456
-      - PORT=8080
-    restart: unless-stopped
-```
-
----
-
-### 🔑 Dynamic Multi-Key Management API
-
-The gateway includes an integrated SQLite-backed key management system. Administrators can manage downstream keys dynamically via `/admin/keys`.
-
-#### 1. Create Downstream Key
-```bash
+# 创建
 curl -X POST http://127.0.0.1:8080/admin/keys \
   -H "Authorization: Bearer admin-secret-key-12345" \
   -H "Content-Type: application/json" \
-  -d '{
-    "name": "User-Alice",
-    "allowed_models": ["gemini-3.5-flash-low", "gpt-4o"]
-  }'
-```
+  -d '{"name": "alice", "expires_in": 86400}'
 
-#### 2. List All Keys
-```bash
-curl -s http://127.0.0.1:8080/admin/keys \
+# 列出
+curl http://127.0.0.1:8080/admin/keys \
+  -H "Authorization: Bearer admin-secret-key-12345"
+
+# 吊销
+curl -X POST http://127.0.0.1:8080/admin/keys/<id>/revoke \
   -H "Authorization: Bearer admin-secret-key-12345"
 ```
 
-#### 3. Revoke Key
-```bash
-curl -X POST http://127.0.0.1:8080/admin/keys/key_7f8a91b2c3d4/revoke \
-  -H "Authorization: Bearer admin-secret-key-12345"
-```
+Key 的签名由 `KEY_HMAC_SECRET` 控制，持久化在 `KEY_DB_PATH`。Android 端把这个库配置成 `:memory:`，重启即清空，不在文件系统留明文。
 
 ---
 
-### 📱 Client Integration
+## 监控
 
-The gateway is 100% compliant with standard OpenAI `/v1` endpoints.
+| 端点 | 返回 |
+| --- | --- |
+| `GET /healthz` | `{"status":"ok","version":"2.0.0"}` |
+| `GET /readyz` | `{"status":"ready","version":"2.0.0"}` |
+| `GET /metrics` | Prometheus 格式 |
 
-#### 1. General Settings
-- **Base URL**: `http://127.0.0.1:8080/v1`
-- **API Key**: Configured `API_KEY` or a key from `DOWNSTREAM_KEYS_JSON`; `/v1/*` always requires a valid Bearer key
-- **Model**: Original upstream model name (e.g. `gemini-3.5-flash-low`, `claude-sonnet-4-6`)
-
-#### 2. SillyTavern Setup
-1. Open API settings, set **API**: `Chat Completion (OpenAI Compatible)`.
-2. **Custom Endpoint**: `http://127.0.0.1:8080/v1`.
-3. **API Key**: Input your `API_KEY`.
-4. Click **Connect**, select model, and enjoy truncation-free roleplaying!
-
-#### 3. Cherry Studio / NextChat / Chatbox
-- **Provider**: OpenAI / OpenAI Compatible
-- **API Host**: `http://127.0.0.1:8080/v1`
-- **API Key**: `sk-helix-123456`
-
-#### 4. cURL Verification
-- **Fetch Models**:
-  ```bash
-  curl -s -H "Authorization: Bearer sk-helix-123456" http://127.0.0.1:8080/v1/models
-  ```
-- **Test Streaming Chat Completion**:
-  ```bash
-  curl http://127.0.0.1:8080/v1/chat/completions \
-    -H "Authorization: Bearer sk-helix-123456" \
-    -H "Content-Type: application/json" \
-    -d '{
-      "model": "gemini-3.5-flash-low",
-      "messages": [{"role": "user", "content": "Write a 500-word short story."}],
-      "stream": true
-    }'
-  ```
+`/metrics` 包含请求总量、活跃请求数、过载拒绝、合成包装命中/修复/重试/冲突等指标。
 
 ---
 
-### 🛡️ Health Checks & Observability
-
-- **Liveness Probe**: `GET /healthz` → returns `{"status":"ok","version":"2.0.0"}` (200 OK)
-- **Readiness Probe**: `GET /readyz` → returns `{"status":"ready","version":"2.0.0"}` (200 OK)
-- **Prometheus Metrics**: `GET /metrics` → exports standard metrics including request totals, latencies, active connections, and synthetic wrapper counts.
-- **Emergency Fallback**: Set `WRAPPER_MODE=off` in `.env` and restart the gateway to revert to transparent raw passthrough.
-
----
-
-### 🗂️ Repository Layout
+## 项目结构
 
 ```text
 Helix-gateway/
 ├── cmd/
-│   ├── gateway/          # server entry point (CLI, multi-platform binaries)
-│   ├── androidbridge/    # JNI bridge, built into libhelix.so
-│   └── live_test/        # end-to-end smoke client
-├── internal/             # anti-truncation core: rewriting, streaming, retry/circuit breaker
-├── pkg/                  # reusable libraries: upstream adapters, logging, config loading
-├── android/              # Android project (Kotlin + Gradle)
+│   ├── gateway/          # 服务端入口
+│   ├── androidbridge/    # JNI 桥接层，编译为 libhelix.so
+│   └── live_test/        # 端到端联调客户端
+├── internal/
+│   ├── synthetic/        # 合成工具协议、流式状态机、参数修复
+│   ├── recovery/         # 重试编排、空响应处理
+│   ├── antiroute/        # 出站请求形态防护
+│   ├── entropy/          # 请求形态随机化
+│   ├── proxy/            # 上游客户端与路由
+│   ├── keymgmt/          # Key 签发、校验、持久化
+│   ├── limiter/ limits/  # 并发控制与体积限制
+│   ├── modelid/          # 模型识别回传
+│   ├── metrics/          # Prometheus 指标
+│   ├── server/           # HTTP 服务与中间件
+│   ├── logger/ config/   # 日志与配置
+├── pkg/gateway/          # 可嵌入的引擎（Android 走这条路径）
+├── android/              # Kotlin + Gradle 工程
 │   └── app/src/main/java/org/helix/gateway/
-│       ├── GatewayApplication.kt   # startup: theme, crash recorder, safe mode
-│       ├── bridge/                 # JNI wrapper around the Go core
-│       ├── data/                   # config models, Keystore crypto, theme preferences
-│       ├── net/                    # gateway self-test client (models / chat)
-│       ├── service/                # foreground service (background keep-alive)
-│       ├── ui/                     # single-screen dashboard (Activity / ViewModel)
-│       └── util/                   # crash reporter, network helpers
-├── .github/workflows/    # CI: Android build + multi-platform release
-└── Dockerfile            # container deployment for the server
+│       ├── GatewayApplication.kt   # 启动流程、崩溃采集、安全模式
+│       ├── bridge/                 # JNI 封装
+│       ├── data/                   # 配置、Keystore 加密、主题偏好
+│       ├── net/                    # 自检客户端
+│       ├── service/                # 前台保活服务
+│       ├── ui/                     # 单屏界面
+│       └── util/                   # 崩溃日志、网络工具
+├── docs/                 # 界面预览与配色素材
+├── scripts/              # JNI 库构建脚本
+└── .github/workflows/    # CI 与发布流水线
 ```
 
-### 📦 Versioning & Release Pipeline
+---
 
-- The version string is kept identical in four places: `android/app/build.gradle.kts` (`versionCode`/`versionName`), `cmd/gateway/main.go`, `internal/*/engine.go` and this README.
-- Pushing a `v*` tag triggers `.github/workflows/release.yml`, which:
-  1. builds and tests the Android app (debug + release, unit tests, lint);
-  2. cross-compiles six server binaries (Linux/Windows/macOS × amd64/arm64);
-  3. injects the tag and commit SHA via `ldflags -X main.Version=<tag>`;
-  4. uploads every artifact plus `checksums.txt` (SHA-256) to the GitHub Release.
-- Verify a release:
+## 构建
+
+### 服务端
+
+```bash
+go build -trimpath -ldflags="-s -w" -o helix-gateway ./cmd/gateway
+./helix-gateway --version
+# Helix Gateway version 2.0.0 (commit: ..., built: ...)
+```
+
+交叉编译：
+
+```bash
+CGO_ENABLED=0 GOOS=linux   GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o gateway-linux-amd64 ./cmd/gateway
+CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -trimpath -ldflags="-s -w" -o gateway.exe ./cmd/gateway
+```
+
+### Android
+
+需要 JDK 17+、Android SDK（API 34 / Build-Tools 34.0.0）、NDK 26.3.11579264、Go 1.24+。
+
+```bash
+# 1. 重新生成四个 ABI 的 JNI 库
+./scripts/build-android-libs.sh
+
+# 2. 单元测试
+cd android && ./gradlew :app:testReleaseUnitTest
+
+# 3. 打包
+./gradlew :app:assembleRelease
+# 产物: app/build/outputs/apk/release/helix-gateway-v2.0.0.apk
+```
+
+改过 JNI 桥接签名后必须重新跑第 1 步，否则 `.so` 与 Kotlin 侧对不上。
+
+---
+
+## 发布流程
+
+版本号需要三处同步：`cmd/gateway/main.go`、`pkg/gateway/engine.go`、`android/app/build.gradle.kts`（`versionCode` 与 `versionName`）。
+
+推 `v*` 标签触发 `.github/workflows/release.yml`：
+
+1. 构建 Android APK（lint + 单测 + `assembleRelease`）
+2. 交叉编译六个服务端二进制（Linux / Windows / macOS × amd64 / arm64）
+3. 用 `ldflags -X` 把版本号与 commit SHA 注入二进制
+4. 上传全部产物和 `checksums.txt` 到 GitHub Release
+
+任意分支的 push 会先跑 `build.yml`：Go 单测与 vet、六平台交叉编译、四 ABI JNI 库、Android lint / 单测 / `assembleRelease`。
+
+校验发布产物：
 
 ```bash
 gh release view v2.0.0
 sha256sum -c checksums.txt
-helix-gateway --version                                  # v2.0.0 (commit: ...)
-aapt2 dump badging helix-gateway-v2.0.0.apk | head -1    # APK version
+helix-gateway --version
+aapt2 dump badging helix-gateway-v2.0.0.apk | head -1
 ```
 
-- Published versions are immutable: every change batch bumps the patch level and repeats the full verification chain (unit tests → device checks → release validation).
+---
+
+## 排错
+
+**`400 Requests ending with a model turn are not supported`**
+Google Gemini 与部分 CPA 上游的约束，要求对话以 `user` 结尾。网关默认会自适应修正；若仍出现，检查 `WRAPPER_MODE` 是否被设成 `off`。
+
+**模型拒答算网关的问题吗**
+不算。分两种：外审拦截（`finish_reason: "SAFETY"` 或 HTTP 400）和内审拒答（模型返回道歉文本，`role: "assistant"`，200）。内审拒答是提示词命中了模型的红线，需要调设定或换模型。
+
+**改了 `.env` 不生效**
+先看启动日志第一行的 `loaded configuration from .env file`，确认加载的是哪个路径。系统环境变量优先级高于 `.env`，同名变量会盖掉文件里的值。
+
+**流式断在半截**
+看网关日志里有没有 `upstream stream ended without a finish_reason or [DONE]`。有的话是上游主动断的，网关已发出 `event: error`。客户端有抗截断脚本会自动续写，没有的话需要手动继续。
+
+**长时间没输出被切断**
+是空闲看门狗触发了。上游思考时间长就调大 `UPSTREAM_TIMEOUT_MS`，别让首字超时卡在默认 120 秒。
+
+**生图或嵌入请求报错**
+用 `NON_TEXT_MODEL_PATTERN` 把这些模型排除在包装之外，走纯透传。
 
 ---
 
-### ❓ Frequently Asked Questions (FAQ)
+## License
 
-#### Q1: Why did I receive 400 "Requests ending with a model turn are not supported"?
-**A**: This is a strict constraint enforced by Google Gemini / CPA upstream requiring conversations to end on a `user` turn. The gateway automatically detects dangling Assistant pre-fills and system messages, sanitizing trailing turns into compliant user turns to eliminate this error.
-
-#### Q2: Is model refusal (e.g., "I cannot fulfill this request") caused by the gateway?
-**A**: No. Refusal occurs either as:
-1. **External Filter**: Guardrails returning `finish_reason: "SAFETY"` or HTTP 400.
-2. **Internal Refusal**: The model itself generating an apology text (`role: "assistant"`, status 200).
-Internal refusal indicates sensitive keywords in the prompt card. Adjust your character card or switch to models with reasoning/thinking enabled.
-
-#### Q3: Does the gateway support non-text models (e.g., image generation, audio)?
-**A**: Yes. The gateway includes an automatic classifier that skips synthetic wrapping for non-text models (DALL-E, Flux, Whisper, Embeddings) and performs 100% raw passthrough.
-
-#### Q4: Why are my changes in `.env` not taking effect?
-**A**: Starting from `v1.0.7`, native `.env` loading is fully supported. Check:
-1. Whether an environment variable with the same name exists in your system (system environment variables take precedence over `.env`);
-2. Check the first log output on startup `loaded configuration from .env file (path: ...)`;
-3. On Windows, use `run.bat` which guarantees loading `.env` from the script directory.
+[MIT](LICENSE)
 
 ---
 
-<a name="license"></a>
-## 🤝 参与贡献 / Contributing
+## English
 
-- **问题反馈**：请附上应用内「查看崩溃日志」的内容（或 `下载/HelixGateway/` 里的文件）与系统版本、机型信息，能显著加快定位速度。
-- **提交改动**：Fork → 新建分支 → 保持 `versionCode`/`versionName` 与 Go 侧版本一致 → 运行 `./gradlew :app:testDebugUnitTest :app:lintDebug` 与 `go build ./...` → 提交 Pull Request。
-- **代码风格**：Kotlin 使用 4 空格缩进与不可变优先；Go 遵循标准 `gofmt`/`go vet`；提交信息使用 `feat:` / `fix:` / `ci:` / `docs:` 前缀。
+Helix Gateway is an anti-truncation gateway for the OpenAI Chat Completions protocol. Written in Go, it runs as a standalone server or ships as an Android app that embeds the same core via JNI.
 
-## 📄 License
+It targets three failure modes that show up constantly in long-form generation: streams that end before `finish_reason`, `assistant`-prefill rejected by Gemini-style "must end with a user turn" checks, and markdown or JSON left structurally broken at the cut point.
 
-This project is licensed under the [MIT License](LICENSE).
-Copyright (c) 2026 Xeltra233.
+It does **not** resume generation on the client's behalf. When upstream truncates, the gateway emits an explicit `event: error` frame instead of a fake `[DONE]`; client-side logic decides whether to continue.
+
+Quick start:
+
+```bash
+export UPSTREAM_BASE_URL="https://api.openai.com/v1"
+export UPSTREAM_API_KEY="sk-your-upstream-key"
+export API_KEY="sk-helix-local"
+export PORT=8080
+go build -o helix-gateway ./cmd/gateway && ./helix-gateway
+```
+
+Point your client at `http://127.0.0.1:8080/v1` with `Authorization: Bearer sk-helix-local`.
+
+Configuration reference, streaming semantics, deployment options, and troubleshooting are documented in Chinese above — the tables are the authoritative source for every environment variable.
