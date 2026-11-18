@@ -8,6 +8,8 @@ import org.helix.gateway.data.GuardSettings
 import org.helix.gateway.data.ModelReportMode
 import org.helix.gateway.data.CryptoProvider
 import org.helix.gateway.data.JvmSoftwareCryptoProvider
+import org.helix.gateway.data.Provider
+import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -39,10 +41,10 @@ class ConfigRepositoryTest {
     fun testInitialConfigCreation() {
         val config = repository.load()
         assertNotNull(config)
-        assertEquals(1, config.providers.size)
-        assertEquals("供应商 1", config.providers[0].name)
+        // A fresh install ships no provider: the list is the user's, not a placeholder.
+        assertTrue(config.providers.isEmpty())
+        assertEquals("", config.currentProviderId)
         assertTrue(config.downstreamKey.startsWith("sk-agw-"))
-        assertEquals(config.currentProviderId, config.providers[0].id)
         assertTrue(configFile.exists())
     }
 
@@ -57,9 +59,9 @@ class ConfigRepositoryTest {
 
     @Test
     fun testProviderSwitchingAndDrafts() {
-        // 1. Initial config
-        val config1 = repository.load()
-        val initialDownstreamKey = config1.downstreamKey
+        // 1. Fresh install, then the first provider the user adds
+        val (initial, p1) = repository.createProvider("供应商 1")
+        val initialDownstreamKey = initial.downstreamKey
 
         // 2. Update provider 1 draft
         repository.updateCurrentProviderDraft("https://api.openai.com", "sk-openai-key")
@@ -78,7 +80,7 @@ class ConfigRepositoryTest {
         assertEquals(initialDownstreamKey, configWithP2.downstreamKey)
 
         // 4. Switch back to provider 1
-        val p1Id = config1.providers[0].id
+        val p1Id = p1.id
         val switchedBack = repository.selectProvider(p1Id)
         assertEquals(p1Id, switchedBack.currentProviderId)
         assertEquals("供应商 1", switchedBack.getCurrentProvider()?.name)
@@ -90,6 +92,7 @@ class ConfigRepositoryTest {
 
     @Test
     fun testDownstreamKeyRegenerationDoesNotAffectProviders() {
+        repository.createProvider("供应商 1")
         repository.updateCurrentProviderDraft("https://api.openai.com", "sk-openai-key")
         val before = repository.load()
         val oldDownstreamKey = before.downstreamKey
@@ -105,31 +108,29 @@ class ConfigRepositoryTest {
     }
 
     @Test
-    fun testDeleteProviderProtection() {
+    fun testDeleteProviderCanEmptyTheList() {
+        val (_, p1) = repository.createProvider("Provider 1")
         val (_, p2) = repository.createProvider("Provider 2")
-        val (c2, p3) = repository.createProvider("Provider 3")
-        assertEquals(3, c2.providers.size)
+        val (c3, p3) = repository.createProvider("Provider 3")
+        assertEquals(3, c3.providers.size)
 
         val afterDeleteP2 = repository.deleteProvider(p2.id)
-        assertEquals(2, afterDeleteP2.providers.size)
-        assertFalse(afterDeleteP2.providers.any { it.id == p2.id })
+        assertEquals(listOf(p1.id, p3.id), afterDeleteP2.providers.map { it.id })
 
-        // Cannot delete down to 0 providers
-        val p1Id = afterDeleteP2.providers[0].id
         val afterDeleteP3 = repository.deleteProvider(p3.id)
-        assertEquals(1, afterDeleteP3.providers.size)
-        assertEquals(p1Id, afterDeleteP3.providers[0].id)
+        assertEquals(listOf(p1.id), afterDeleteP3.providers.map { it.id })
 
-        // Attempting to delete the last one should be ignored
-        val afterDeleteLast = repository.deleteProvider(p1Id)
-        assertEquals(1, afterDeleteLast.providers.size)
-        assertEquals(p1Id, afterDeleteLast.providers[0].id)
+        // The last row may go too: an empty list is a state the user can reach, and it survives a
+        // reload instead of being repopulated behind their back.
+        val empty = repository.deleteProvider(p1.id)
+        assertTrue(empty.providers.isEmpty())
+        assertEquals("", empty.currentProviderId)
+        assertTrue(ConfigRepository(configFile, cryptoProvider).load().providers.isEmpty())
     }
 
     @Test
     fun testRenameProvider() {
-        val initial = repository.load()
-        val p1 = initial.getCurrentProvider()!!
+        val p1 = repository.createProvider("供应商 1").second
         assertEquals("供应商 1", p1.name)
 
         val renamed = repository.renameProvider(p1.id, "OpenAI-Official")
@@ -230,7 +231,7 @@ class ConfigRepositoryTest {
         configFile.writeText("{ corrupted_json !!!")
         val recovered = repository.load()
         assertNotNull(recovered)
-        assertEquals(1, recovered.providers.size)
+        assertTrue(recovered.providers.isEmpty())
         assertTrue(recovered.downstreamKey.startsWith("sk-agw-"))
     }
 
@@ -240,7 +241,7 @@ class ConfigRepositoryTest {
         val failing = ConfigRepository(configFile, ThrowingCryptoProvider())
 
         val config = failing.load()
-        assertEquals(1, config.providers.size)
+        assertTrue(config.providers.isEmpty())
         assertNotNull("save failure should be recorded", failing.lastSaveError)
         assertFalse(failing.save(config))
         assertFalse("no partial file should be left behind", configFile.exists())
@@ -248,6 +249,60 @@ class ConfigRepositoryTest {
         val updated = failing.updatePort(39005)
         assertEquals(39005, updated.port)
         assertNotNull("still failing to persist, but never throwing", failing.lastSaveError)
+    }
+
+    @Test
+    fun testUpgradeKeepsConfiguredProviders() {
+        // What an in-place upgrade over a filled-in install must never do: drop providers, rename
+        // them, or lose the upstream keys that are only stored encrypted.
+        val first = Provider(name = "公司网关", upstreamUrl = "https://a.example/v1", upstreamKey = "sk-aaa")
+        val second = Provider(name = "备用", upstreamUrl = "https://b.example/v1", upstreamKey = "sk-bbb")
+        repository.save(
+            repository.load().copy(providers = listOf(first, second), currentProviderId = second.id)
+        )
+
+        val reopened = ConfigRepository(configFile, cryptoProvider).load()
+
+        assertEquals(listOf("公司网关", "备用"), reopened.providers.map { it.name })
+        assertEquals(
+            listOf("https://a.example/v1", "https://b.example/v1"),
+            reopened.providers.map { it.upstreamUrl }
+        )
+        assertEquals(listOf("sk-aaa", "sk-bbb"), reopened.providers.map { it.upstreamKey })
+        assertEquals(second.id, reopened.currentProviderId)
+    }
+
+    @Test
+    fun testEmptyProviderListStaysEmpty() {
+        // Clearing the list is a decision, not damage: no launch may invent a row, and the file must
+        // keep the empty array as it was written.
+        repository.save(repository.load().copy(providers = emptyList(), currentProviderId = ""))
+
+        val reopened = ConfigRepository(configFile, cryptoProvider).load()
+
+        assertTrue(reopened.providers.isEmpty())
+        assertEquals("", reopened.currentProviderId)
+        assertEquals(
+            "the file is not rewritten with a placeholder",
+            0,
+            JSONObject(configFile.readText()).getJSONArray("providers").length()
+        )
+    }
+
+    @Test
+    fun testUnreadableFileIsKeptForRecovery() {
+        // Refuse to clobber a config we could not parse: on an upgrade that file still holds the
+        // provider URLs and the downstream key, and the backup is then the only copy left.
+        val broken = "{ this is not json"
+        configFile.writeText(broken)
+
+        val loaded = ConfigRepository(configFile, cryptoProvider).load()
+
+        assertTrue("the app stays usable", loaded.providers.isEmpty())
+        assertEquals("the original file is left alone", broken, configFile.readText())
+        val backup = File(tempDir, ConfigRepository.CORRUPTED_BACKUP_NAME)
+        assertTrue("the unreadable file is kept", backup.exists())
+        assertEquals(broken, backup.readText())
     }
 
     private class ThrowingCryptoProvider : CryptoProvider {

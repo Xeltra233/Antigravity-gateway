@@ -18,4 +18,26 @@
     <!-- Switch track: neutral when off so it blends into the page, accent when on. -->
     <attr name="agwSwitchOn" format="color" />
     <attr name="agwSwitchOff" format="color" />
+
+    <!-- Rows that paint themselves (guard level / model report pages). -->
+    <attr name="rowTitle" format="string" />
+    <attr name="rowHint" format="string" />
+    <attr name="segmentFirst" format="string" />
+    <attr name="segmentSecond" format="string" />
+
+    <declare-styleable name="ChoiceRowView">
+        <attr name="rowTitle" />
+        <attr name="rowHint" />
+    </declare-styleable>
+
+    <declare-styleable name="ToggleRowView">
+        <attr name="rowTitle" />
+        <attr name="rowHint" />
+    </declare-styleable>
+
+    <declare-styleable name="SegmentRowView">
+        <attr name="rowTitle" />
+        <attr name="segmentFirst" />
+        <attr name="segmentSecond" />
+    </declare-styleable>
 </resources>

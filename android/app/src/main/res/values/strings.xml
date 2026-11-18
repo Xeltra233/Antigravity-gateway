@@ -46,20 +46,12 @@
     <string name="crash_log_share">分享</string>
     <string name="crash_log_location">日志文件位置（可直接拷贝给开发者）：\n%1$s</string>
     <string name="crash_safe_mode_hint">安全模式：检测到连续 %1$d 次启动未成功，已跳过主题等可选初始化。请点下方按钮查看并分享崩溃日志。</string>
-    <string name="settings_entry">设置</string>
-    <string name="settings_title">设置</string>
-    <string name="settings_save">保存</string>
-    <string name="settings_reset">恢复默认</string>
-    <string name="settings_section_guard">请求防护</string>
-    <string name="settings_guard_level">防护强度</string>
     <string name="settings_wire_escape">非 ASCII 转义</string>
     <string name="settings_scrub">指令块净化</string>
     <string name="settings_split">敏感词拆分</string>
     <string name="settings_demote_prefill">预填降级</string>
     <string name="settings_scrub_scope">净化范围</string>
     <string name="settings_separator">拆分分隔符</string>
-    <string name="settings_section_model">模型识别</string>
-    <string name="settings_model_report">回传方式</string>
     <string name="settings_model_report_key">回传字段名</string>
     <string name="settings_guard_level_off">关闭</string>
     <string name="settings_guard_level_wire">转义</string>
@@ -73,8 +65,6 @@
     <string name="settings_model_report_headers">响应头</string>
     <string name="settings_model_report_body">响应体</string>
     <string name="settings_model_report_both">响应头 + 响应体</string>
-    <string name="settings_saved">设置已保存</string>
-    <string name="settings_reset_done">已恢复默认设置</string>
     <string name="settings_report_key_invalid">回传字段名不能为空</string>
     <string name="settings_restart_to_apply">防护与模型识别设置在网关启动时生效，请重新启动网关</string>
     <string name="hint_level_off">不改写请求，原样转发</string>
@@ -98,11 +88,16 @@
     <string name="page_gateway">网关</string>
     <string name="page_providers">供应商</string>
     <string name="page_routing">路由</string>
+    <string name="page_guard_level">防路由等级</string>
+    <string name="page_report">路由上报</string>
+    <string name="section_guard_level">等级</string>
+    <string name="section_guard_detail">细节</string>
+    <string name="section_guard_extra">范围与分隔符</string>
+    <string name="section_report_mode">回传方式</string>
+    <string name="value_placeholder">—</string>
     <string name="provider_new">新建</string>
-    <string name="guard_settings">请求防护设置</string>
     <string name="upstream_section">接口配置</string>
 
-    <string name="back">返回</string>
     <string name="copy">复制</string>
     <string name="status_stopped">未启动</string>
     <string name="client_endpoint_label">客户端接入地址</string>
@@ -118,7 +113,7 @@
     <string name="provider_move_up">上移</string>
     <string name="provider_move_down">下移</string>
     <string name="provider_action_delete">删除</string>
-    <string name="provider_empty">还没有供应商，先新建一个</string>
+    <string name="provider_empty">还没有供应商</string>
     <string name="row_addr_fixed">监听地址固定为本机回环地址</string>
     <string name="row_port_title">监听端口</string>
     <string name="row_port_invalid">端口需在 1 到 65535 之间</string>

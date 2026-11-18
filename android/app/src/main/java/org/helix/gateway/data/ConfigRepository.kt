@@ -21,6 +21,9 @@ class ConfigRepository(
         const val CURRENT_SCHEMA_VERSION = 2
         const val DEFAULT_CONFIG_FILE_NAME = "gateway_config.json"
 
+        /** Fixed name: a file that stays unreadable must keep exactly one copy, not one per launch. */
+        const val CORRUPTED_BACKUP_NAME = "gateway_config_corrupted.bak"
+
         fun generateDownstreamKey(): String {
             val randomBytes = ByteArray(24)
             SecureRandom().nextBytes(randomBytes)
@@ -67,14 +70,13 @@ class ConfigRepository(
                 providersList.add(Provider(id = id, name = name, upstreamUrl = url, upstreamKey = key))
             }
 
-            if (providersList.isEmpty()) {
-                providersList.add(Provider(name = "供应商 1"))
-            }
+            // An empty list stays empty: the provider page has its own empty state, and a config the
+            // user deliberately cleared must not grow a row back on the next launch.
 
             val finalCurrentId = if (providersList.any { it.id == currentId }) {
                 currentId
             } else {
-                providersList.first().id
+                providersList.firstOrNull()?.id ?: ""
             }
 
             val loadedConfig = GatewayConfig(
@@ -88,32 +90,30 @@ class ConfigRepository(
             inMemoryConfig = loadedConfig
             return loadedConfig
         } catch (e: Exception) {
-            // If corrupted, create fallback and backup corrupted file
-            val backupFile = File(storageFile.parentFile, "gateway_config_corrupted_${System.currentTimeMillis()}.bak")
+            // Unreadable file: keep it. Overwriting it here would throw away the provider URLs, the
+            // provider names and the downstream key of an install that was working before the
+            // upgrade, and the backup below is then the only copy left.
+            val backupFile = File(storageFile.parentFile, CORRUPTED_BACKUP_NAME)
             try {
-                storageFile.copyTo(backupFile, overwrite = true)
+                if (!backupFile.exists()) storageFile.copyTo(backupFile, overwrite = true)
             } catch (_: Exception) {}
 
             val fallback = createInitialConfig()
-            save(fallback)
             inMemoryConfig = fallback
             return fallback
         }
     }
 
     private fun createInitialConfig(): GatewayConfig {
-        val initialProvider = Provider(
-            id = UUID.randomUUID().toString(),
-            name = "供应商 1",
-            upstreamUrl = "",
-            upstreamKey = ""
-        )
+        // A fresh install starts with nothing but the relay settings. The provider list belongs to
+        // the user: an invented "供应商 1" would look configured while its Base URL is still empty,
+        // and it would come back after every delete.
         return GatewayConfig(
             schemaVersion = CURRENT_SCHEMA_VERSION,
-            currentProviderId = initialProvider.id,
+            currentProviderId = "",
             downstreamKey = generateDownstreamKey(),
             port = NetworkUtils.GATEWAY_PORT,
-            providers = listOf(initialProvider)
+            providers = emptyList()
         )
     }
 
@@ -245,13 +245,12 @@ class ConfigRepository(
     @Synchronized
     fun deleteProvider(providerId: String): GatewayConfig {
         val current = load()
-        if (current.providers.size <= 1) {
-            // Cannot delete the last provider
-            return current
-        }
         val updatedList = current.providers.filter { it.id != providerId }
+        if (updatedList.size == current.providers.size) return current
+        // Deleting the last provider is allowed: an empty list is a state the user can choose, and
+        // nothing puts a row back afterwards.
         val newCurrentId = if (current.currentProviderId == providerId) {
-            updatedList.first().id
+            updatedList.firstOrNull()?.id ?: ""
         } else {
             current.currentProviderId
         }

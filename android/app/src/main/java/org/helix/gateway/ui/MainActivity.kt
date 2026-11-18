@@ -24,6 +24,7 @@ import android.view.ContextThemeWrapper
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewTreeObserver
+import android.view.inputmethod.EditorInfo
 import android.view.animation.PathInterpolator
 import android.widget.BaseAdapter
 import android.text.InputType
@@ -53,6 +54,9 @@ import kotlinx.coroutines.launch
 import org.helix.gateway.GatewayApplication
 import org.helix.gateway.R
 import org.helix.gateway.data.AntiRouteLevel
+import org.helix.gateway.data.AntiRouteScrubScope
+import org.helix.gateway.data.AntiRouteSeparator
+import org.helix.gateway.data.GuardSettings
 import org.helix.gateway.data.ModelReportMode
 import org.helix.gateway.data.Provider
 import org.helix.gateway.data.Skin
@@ -75,8 +79,17 @@ class MainActivity : AppCompatActivity() {
         /** Holds the sketch stroke back until the window's enter animation has finished. */
         private const val REVEAL_HOLD_MS = 280L
 
-        /** Page switch duration; matches the 300ms the HTML preview uses for its tab fades. */
-        private const val PAGE_SWITCH_MS = 300L
+        /**
+         * One motion language for everything that replaces a page: a tab switch and an overlay page
+         * open share the same duration, the same curve and the same 12dp offset, so the two never
+         * read as different kinds of transition. Leaving is shorter than arriving, as everywhere
+         * else in the app: getting out of the way should never feel slower than showing up.
+         */
+        private const val MOTION_IN_MS = 180L
+        private const val MOTION_OUT_MS = 140L
+        private const val MOTION_SHIFT_DP = 12f
+        private val MOTION_ENTER = PathInterpolator(0.2f, 0f, 0f, 1f)
+        private val MOTION_EXIT = PathInterpolator(0.4f, 0f, 1f, 1f)
 
         /** Ink bleed under glyphs. */
         private const val BLEED_RADIUS = 0.45f
@@ -116,6 +129,17 @@ class MainActivity : AppCompatActivity() {
     private val viewModel: MainViewModel by viewModels()
     private lateinit var providerAdapter: ProviderAdapter
     private var detailProviderId: String? = null
+
+    /**
+     * Which full-page overlay is open. The provider page and the two routing pages all behave like
+     * pages — they cover the content root and back closes them — so one field tracks them all.
+     */
+    private var openSheet: Sheet? = null
+
+    /** Latest guard snapshot written from this screen; see [renderRouting]. */
+    private var pendingGuard: GuardSettings? = null
+
+    private enum class Sheet { PROVIDER, GUARD, REPORT }
     /** The key field opens masked every time; the eye only reveals it for the current visit. */
     private var keyRevealed = false
 
@@ -131,9 +155,9 @@ class MainActivity : AppCompatActivity() {
         bindShell()
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                // The provider page behaves like a page, so back closes it before leaving the app.
-                if (binding.sheetProviderDetail.visibility == View.VISIBLE) {
-                    closeProviderDetail()
+                // Every overlay behaves like a page, so back closes it before leaving the app.
+                if (openSheet != null) {
+                    closeSheet()
                 } else {
                     isEnabled = false
                     onBackPressedDispatcher.onBackPressed()
@@ -153,6 +177,7 @@ class MainActivity : AppCompatActivity() {
     private fun bindShell() {
         setupProviderList()
         setupProviderDetail()
+        setupRoutingEntries()
         binding.tvTestResult.movementMethod = ScrollingMovementMethod()
         binding.btnViewCrashLog.setOnClickListener { showCrashLogDialog() }
         setupListeners()
@@ -289,24 +314,11 @@ class MainActivity : AppCompatActivity() {
             if (open) showStyleMenu() else stylePopup?.dismiss()
         }
 
-        // Guard and model-report settings (top-right, next to the skin toggle)
-        binding.btnSettings.setOnClickListener {
-            GuardSettingsSheet(this) { guard ->
-                viewModel.updateGuardSettings(guard)
-                Toast.makeText(this, R.string.settings_saved, Toast.LENGTH_SHORT).show()
-            }.show(viewModel.uiState.value.config.guard)
-        }
 
         // Three-page shell. The bottom tabs are the only navigation, so each one also owns the
         // page it reveals; there is no back stack to keep in sync.
         setupTabs()
         binding.btnNewProvider.setOnClickListener { showCreateProviderDialog() }
-        binding.btnOpenGuard.setOnClickListener {
-            GuardSettingsSheet(this) { guard ->
-                viewModel.updateGuardSettings(guard)
-                Toast.makeText(this, R.string.settings_saved, Toast.LENGTH_SHORT).show()
-            }.show(viewModel.uiState.value.config.guard)
-        }
 
 
         // Upstream URL & Key text watchers
@@ -395,7 +407,6 @@ class MainActivity : AppCompatActivity() {
      * no data path changes.
      */
     private fun setupRows() {
-        binding.btnBack.setOnClickListener { finish() }
         binding.viewStatusSwitch.setOnClickListener { binding.btnStartStop.performClick() }
 
         binding.rowAddr.setOnClickListener {
@@ -437,8 +448,6 @@ class MainActivity : AppCompatActivity() {
                 binding.etTestModelId.setText(value)
             }
         }
-        binding.rowGuardLevel.setOnClickListener { binding.btnOpenGuard.performClick() }
-        binding.rowReport.setOnClickListener { binding.btnOpenGuard.performClick() }
         binding.rowRunLog.setOnClickListener {
             val message = viewModel.uiState.value.statusMessage.ifBlank { getString(R.string.row_run_log_empty) }
             GlassDialogs.message(
@@ -494,9 +503,11 @@ class MainActivity : AppCompatActivity() {
         binding.tvRowKey.text = if (config.downstreamKey.isEmpty()) "—" else "••••••••"
         binding.tvRowTestModel.text = binding.etTestModelId.text?.toString()?.takeIf { it.isNotBlank() }
             ?: getString(R.string.row_model_id_default)
-        binding.tvProviderEmpty.visibility = if (config.providers.isEmpty()) View.VISIBLE else View.GONE
-        binding.layoutProviderList.visibility =
-            if (config.providers.isEmpty()) View.GONE else View.VISIBLE
+        // The label and the rows live in the same container, so the swap happens between the two
+        // children and never on the container itself.
+        val noProviders = config.providers.isEmpty()
+        binding.tvProviderEmpty.visibility = if (noProviders) View.VISIBLE else View.GONE
+        binding.recyclerProviders.visibility = if (noProviders) View.GONE else View.VISIBLE
         binding.tvGatewayTitle.text = when (state.gatewayState) {
             GatewayState.RUNNING -> getString(R.string.row_status_running)
             GatewayState.STARTING -> getString(R.string.row_status_starting)
@@ -527,7 +538,7 @@ class MainActivity : AppCompatActivity() {
         // The provider page and the routing summary are driven by the same state object, so they
         // stay correct after create / rename / delete without extra callbacks.
         renderProviderList(state)
-        updateGuardSummary(state)
+        renderRouting(state)
         syncRowValues(state)
         // 1. Provider header
 
@@ -774,40 +785,8 @@ class MainActivity : AppCompatActivity() {
      * The silk switch is a white-on-glass pill; on the light skins that reads as nothing at all,
      * so the same geometry is rebuilt from the skin's accent and rule colours.
      */
-    private fun statusSwitchDrawable(on: Boolean): Drawable? {
-        if (skinPreferences.skin == Skin.SILK) {
-            // Fresh instance per call: the cached drawable is shared, and attaching it to a second
-            // view raises "already belongs to another owner" for layer-lists without a constant state.
-            val id = if (on) R.drawable.pv_switch else R.drawable.pv_switch_off
-            return ContextCompat.getDrawable(this, id)?.constantState?.newDrawable(resources)?.mutate()
-        }
-        val density = resources.displayMetrics.density
-        val track = if (on) resolveThemeColor(R.attr.agwSwitchOn) else resolveThemeColor(R.attr.agwSwitchOff)
-        val trackShape = GradientDrawable().apply {
-            cornerRadius = 13.5f * density
-            setColor(track)
-            // The sketch switch is an inked outline over a flat swatch, not a soft pill.
-            if (skinPreferences.skin == Skin.SKETCH) {
-                setStroke((1.6f * density).roundToInt(), resolveThemeColor(R.attr.agwFieldStroke))
-            }
-        }
-        val thumbShape = GradientDrawable().apply {
-            shape = GradientDrawable.OVAL
-            setColor(Color.WHITE)
-        }
-        val layers = LayerDrawable(arrayOf(trackShape, thumbShape))
-        val pad = (3 * density).toInt()
-        val width = (52 * density).toInt()
-        val thumb = (21 * density).toInt()
-        layers.setLayerInset(
-            1,
-            if (on) width - thumb - pad else pad,
-            pad,
-            if (on) pad else width - thumb - pad,
-            pad
-        )
-        return layers
-    }
+    private fun statusSwitchDrawable(on: Boolean): Drawable =
+        SkinSwitch.create(this, skinPreferences.skin, on)
 
     private fun roundedFill(fill: Int, stroke: Int, radiusDp: Float, strokeDp: Float = 1f): GradientDrawable =
         GradientDrawable().apply {
@@ -977,11 +956,8 @@ class MainActivity : AppCompatActivity() {
     /** Re-inflates the shell against the restyled theme and puts the user back where they were. */
     private fun rebuildShell() {
         val page = currentPage
-        val openDetailId = if (binding.sheetProviderDetail.visibility == View.VISIBLE) {
-            detailProviderId
-        } else {
-            null
-        }
+        val sheet = openSheet
+        val detailId = detailProviderId
         val firstVisible = (binding.recyclerProviders.layoutManager as? LinearLayoutManager)
             ?.findFirstVisibleItemPosition() ?: 0
 
@@ -990,6 +966,8 @@ class MainActivity : AppCompatActivity() {
         binding.btnStyle.setOpen(false)
         binding.silkBackdrop.stopBackdrop()
         binding.sheetProviderDetail.animate().cancel()
+        binding.sheetGuardPage.animate().cancel()
+        binding.sheetReportPage.animate().cancel()
         binding.layoutContentRoot.animate().cancel()
 
         // cloneInContext keeps AppCompat's view factory, so <TextView> and friends are still
@@ -1004,9 +982,15 @@ class MainActivity : AppCompatActivity() {
         selectPage(page, animate = false)
         if (firstVisible > 0) binding.recyclerProviders.scrollToPosition(firstVisible)
         detailProviderId = null
-        openDetailId?.let { id ->
-            viewModel.uiState.value.config.providers.firstOrNull { it.id == id }
-                ?.let { openProviderDetail(it) }
+        openSheet = null
+        when (sheet) {
+            Sheet.PROVIDER -> detailId?.let { id ->
+                viewModel.uiState.value.config.providers.firstOrNull { it.id == id }
+                    ?.let { openProviderDetail(it) }
+            }
+            Sheet.GUARD -> showSheet(Sheet.GUARD)
+            Sheet.REPORT -> showSheet(Sheet.REPORT)
+            null -> Unit
         }
         updateCrashLogEntry()
 
@@ -1068,24 +1052,45 @@ class MainActivity : AppCompatActivity() {
         val pages = arrayOf(binding.pageGateway, binding.pageProviders, binding.pageRouting)
         if (index == currentPage && pages[index].visibility == View.VISIBLE) return
 
+        val shift = MOTION_SHIFT_DP * resources.displayMetrics.density *
+            if (index > currentPage) 1f else -1f
+
+        // The page being left fades out on the way, instead of vanishing on the same frame the new
+        // one starts fading in: a hard cut under a 180ms fade is what made switching tabs feel
+        // unlike opening a page.
         pages.forEachIndexed { i, page ->
-            if (i != index) {
-                page.animate().cancel()
+            if (i == index) return@forEachIndexed
+            page.animate().cancel()
+            if (!animate || page.visibility != View.VISIBLE) {
                 page.visibility = View.GONE
+                page.alpha = 1f
+                page.translationX = 0f
+            } else {
+                page.animate()
+                    .alpha(0f)
+                    .translationX(-shift * 0.5f)
+                    .setDuration(MOTION_OUT_MS)
+                    .setInterpolator(MOTION_EXIT)
+                    .withEndAction {
+                        page.visibility = View.GONE
+                        page.alpha = 1f
+                        page.translationX = 0f
+                    }
+                    .start()
             }
         }
+
         val incoming = pages[index]
         incoming.visibility = View.VISIBLE
         incoming.animate().cancel()
         if (animate) {
             incoming.alpha = 0f
-            incoming.translationX = 24f * resources.displayMetrics.density *
-                if (index > currentPage) 1f else -1f
+            incoming.translationX = shift
             incoming.animate()
                 .alpha(1f)
                 .translationX(0f)
-                .setDuration(PAGE_SWITCH_MS)
-                .setInterpolator(PathInterpolator(0.2f, 0.8f, 0.2f, 1f))
+                .setDuration(MOTION_IN_MS)
+                .setInterpolator(MOTION_ENTER)
                 .start()
         } else {
             incoming.alpha = 1f
@@ -1258,7 +1263,6 @@ class MainActivity : AppCompatActivity() {
 
         val holder = row.tag
         if (holder !is ProviderAdapter.ProviderHolder) return
-        val density = resources.displayMetrics.density
         holder.name.setTypeface(
             null,
             if (isCurrent) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL
@@ -1303,29 +1307,87 @@ class MainActivity : AppCompatActivity() {
     }
 
     /** Opens the editable page for one provider; back returns to the list. */
+    /** Opens the editable page for one provider; back returns to the list. */
     private fun openProviderDetail(provider: Provider) {
         detailProviderId = provider.id
         binding.etProviderDetailName.setText(provider.name)
         binding.etProviderDetailUrl.setText(provider.upstreamUrl)
         binding.etProviderDetailKey.setText(provider.upstreamKey)
         applyKeyVisibility(false)
-        // Deleting the last provider would leave the gateway without an upstream.
-        binding.btnProviderDetailDelete.visibility =
-            if (viewModel.uiState.value.config.providers.size > 1) View.VISIBLE else View.GONE
-        // The page itself is transparent so the silk keeps showing; the list behind it has to go,
-        // otherwise its pills read through the translucent fields.
-        binding.layoutContentRoot.visibility = View.INVISIBLE
-        binding.sheetProviderDetail.visibility = View.VISIBLE
-        binding.sheetProviderDetail.alpha = 0f
-        binding.sheetProviderDetail.animate().alpha(1f).setDuration(140).start()
+        // 删除总是可用: removing the last row leaves the list empty on purpose, and the page shows
+        // its own empty state until the user adds one back.
+        binding.btnProviderDetailDelete.visibility = View.VISIBLE
+        showSheet(Sheet.PROVIDER)
     }
 
-    private fun closeProviderDetail() {
-        binding.layoutContentRoot.visibility = View.VISIBLE
-        binding.sheetProviderDetail.animate().alpha(0f).setDuration(110)
-            .withEndAction { binding.sheetProviderDetail.visibility = View.GONE }
+    /**
+     * Opens a full-page overlay.
+     *
+     * All three are transparent so the silk keeps showing behind them, which means the content root
+     * has to go: its capsules and pills would otherwise read through the translucent fields.
+     */
+    private fun showSheet(sheet: Sheet) {
+        val view = sheetView(sheet)
+        openSheet = sheet
+        val shift = MOTION_SHIFT_DP * resources.displayMetrics.density
+
+        // Same tokens as a tab switch: the page underneath fades out instead of blinking away, and
+        // the overlay rises the same 12dp the incoming tab slides, so both read as one movement.
+        binding.layoutContentRoot.animate().cancel()
+        binding.layoutContentRoot.animate()
+            .alpha(0f)
+            .setDuration(MOTION_OUT_MS)
+            .setInterpolator(MOTION_EXIT)
+            .withEndAction { binding.layoutContentRoot.visibility = View.INVISIBLE }
             .start()
-        detailProviderId = null
+
+        view.animate().cancel()
+        view.visibility = View.VISIBLE
+        view.alpha = 0f
+        view.translationY = shift
+        view.animate()
+            .alpha(1f)
+            .translationY(0f)
+            .setDuration(MOTION_IN_MS)
+            .setInterpolator(MOTION_ENTER)
+            .start()
+    }
+
+    private fun closeSheet() {
+        val sheet = openSheet ?: return
+        val view = sheetView(sheet)
+        openSheet = null
+        if (sheet == Sheet.PROVIDER) detailProviderId = null
+        val shift = MOTION_SHIFT_DP * resources.displayMetrics.density
+
+        // Leaving runs the entry backwards on the exit curve, and the page underneath comes back on
+        // the enter curve rather than appearing fully lit while the overlay is still fading.
+        view.animate().cancel()
+        view.animate()
+            .alpha(0f)
+            .translationY(shift)
+            .setDuration(MOTION_OUT_MS)
+            .setInterpolator(MOTION_EXIT)
+            .withEndAction {
+                view.visibility = View.GONE
+                view.translationY = 0f
+            }
+            .start()
+
+        binding.layoutContentRoot.animate().cancel()
+        binding.layoutContentRoot.visibility = View.VISIBLE
+        binding.layoutContentRoot.alpha = 0f
+        binding.layoutContentRoot.animate()
+            .alpha(1f)
+            .setDuration(MOTION_IN_MS)
+            .setInterpolator(MOTION_ENTER)
+            .start()
+    }
+
+    private fun sheetView(sheet: Sheet): View = when (sheet) {
+        Sheet.PROVIDER -> binding.sheetProviderDetail
+        Sheet.GUARD -> binding.sheetGuardPage
+        Sheet.REPORT -> binding.sheetReportPage
     }
 
     /** Writes the three edited fields back; blank input keeps the stored value. */
@@ -1338,7 +1400,7 @@ class MainActivity : AppCompatActivity() {
             binding.etProviderDetailUrl.text?.toString()?.trim().orEmpty(),
             binding.etProviderDetailKey.text?.toString()?.trim().orEmpty()
         )
-        closeProviderDetail()
+        closeSheet()
     }
 
     /**
@@ -1360,7 +1422,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupProviderDetail() {
-        binding.btnProviderDetailBack.setOnClickListener { closeProviderDetail() }
+        binding.btnProviderDetailBack.setOnClickListener { closeSheet() }
         binding.btnProviderDetailKeyToggle.setOnClickListener { applyKeyVisibility(!keyRevealed) }
         paintPrimaryButton(binding.btnProviderDetailSave, com.google.android.material.R.attr.colorPrimary)
         binding.btnProviderDetailSave.setOnClickListener { saveProviderDetail() }
@@ -1374,7 +1436,9 @@ class MainActivity : AppCompatActivity() {
         // Every provider lives in the list, as in the reference board: the active pill keeps its
         // 使用中 chip instead of being pulled out into a separate header card.
         providerAdapter.submit(state.config.providers, state.config.currentProviderId)
-        binding.layoutProviderList.visibility =
+        // Only the rows go away when the list is empty: the container also holds the "还没有供应商"
+        // label, so hiding the container would hide the very text that explains the empty page.
+        binding.recyclerProviders.visibility =
             if (state.config.providers.isEmpty()) View.GONE else View.VISIBLE
     }
 
@@ -1390,25 +1454,137 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
-    private fun updateGuardSummary(state: UiState) {
-        val guard = state.config.guard
-        val level = getString(
-            when (guard.antiRouteLevel) {
-                AntiRouteLevel.OFF -> R.string.settings_guard_level_off
-                AntiRouteLevel.WIRE -> R.string.settings_guard_level_wire
-                AntiRouteLevel.STANDARD -> R.string.settings_guard_level_standard
-                AntiRouteLevel.DEEP -> R.string.settings_guard_level_deep
-            }
-        )
-        val report = when (guard.modelReport) {
-            ModelReportMode.OFF -> "关闭"
-            ModelReportMode.HEADERS -> "响应头"
-            ModelReportMode.BODY -> "响应体"
-            ModelReportMode.BOTH -> "响应头 + 响应体"
+    /**
+     * The routing page: two entries, each opening the page that owns one half of the guard.
+     *
+     * Everything on both pages reads the same snapshot. A tap writes one field through [applyGuard]
+     * and the next render puts it back on screen, so the UI holds no copy of the configuration;
+     * [pendingGuard] only bridges the gap until that write comes back.
+     */
+    private fun renderRouting(state: UiState) {
+        if (pendingGuard == state.config.guard) pendingGuard = null
+        paintRouting(pendingGuard ?: state.config.guard, state.guardNeedsRestart)
+    }
+
+    /** Paints both pages and the two entries from one snapshot, so they can never disagree. */
+    private fun paintRouting(guard: GuardSettings, needsRestart: Boolean) {
+        binding.tvRowGuardLevel.text = getString(guard.antiRouteLevel.label())
+        binding.tvRowReport.text = getString(guard.modelReport.label())
+
+        val density = resources.displayMetrics.density
+        val accent = resolveThemeColor(android.R.attr.colorAccent)
+        val rule = resolveThemeColor(R.attr.agwChevron)
+        val strokeDp = if (skinPreferences.skin == Skin.SKETCH) 2.2f else 1.6f
+        binding.glyphGuardLevel.background = levelMeter(density, guard.antiRouteLevel, accent, rule)
+        binding.glyphReport.background =
+            reportGlyph(density, guard.modelReport, accent, rule, strokeDp)
+
+        val notice = if (needsRestart) View.VISIBLE else View.GONE
+        binding.tvGuardRestartNotice.visibility = notice
+        binding.tvReportRestartNotice.visibility = notice
+
+        binding.rowLevelOff.isChosen = guard.antiRouteLevel == AntiRouteLevel.OFF
+        binding.rowLevelWire.isChosen = guard.antiRouteLevel == AntiRouteLevel.WIRE
+        binding.rowLevelStandard.isChosen = guard.antiRouteLevel == AntiRouteLevel.STANDARD
+        binding.rowLevelDeep.isChosen = guard.antiRouteLevel == AntiRouteLevel.DEEP
+        binding.swWireEscape.isChecked = guard.wireEscape
+        binding.swScrub.isChecked = guard.scrub
+        binding.swSplit.isChecked = guard.split
+        binding.swDemotePrefill.isChecked = guard.demotePrefill
+        binding.segScrubScope.value = if (guard.scrubScope == AntiRouteScrubScope.ALL) 1 else 0
+        binding.segSeparator.value = if (guard.separator == AntiRouteSeparator.WORD_JOINER) 1 else 0
+
+        binding.rowReportOff.isChosen = guard.modelReport == ModelReportMode.OFF
+        binding.rowReportHeaders.isChosen = guard.modelReport == ModelReportMode.HEADERS
+        binding.rowReportBody.isChosen = guard.modelReport == ModelReportMode.BODY
+        binding.rowReportBoth.isChosen = guard.modelReport == ModelReportMode.BOTH
+        // With reporting off there is no field to name, so the input dims instead of disappearing.
+        val keyEditable = guard.modelReport != ModelReportMode.OFF
+        binding.etReportKey.isEnabled = keyEditable
+        binding.etReportKey.alpha = if (keyEditable) 1f else 0.4f
+        if (!binding.etReportKey.hasFocus() && binding.etReportKey.text?.toString() != guard.modelReportKey) {
+            binding.etReportKey.setText(guard.modelReportKey)
         }
-        binding.tvGuardSummary.text = "防护强度：$level · 模型上报：$report"
-        binding.tvRowGuardLevel.text = level
-        binding.tvRowReport.text = report
+    }
+
+    private fun AntiRouteLevel.label(): Int = when (this) {
+        AntiRouteLevel.OFF -> R.string.settings_guard_level_off
+        AntiRouteLevel.WIRE -> R.string.settings_guard_level_wire
+        AntiRouteLevel.STANDARD -> R.string.settings_guard_level_standard
+        AntiRouteLevel.DEEP -> R.string.settings_guard_level_deep
+    }
+
+    private fun ModelReportMode.label(): Int = when (this) {
+        ModelReportMode.OFF -> R.string.settings_model_report_off
+        ModelReportMode.HEADERS -> R.string.settings_model_report_headers
+        ModelReportMode.BODY -> R.string.settings_model_report_body
+        ModelReportMode.BOTH -> R.string.settings_model_report_both
+    }
+
+    /** Written on tap, before the configuration write returns, so a page never lags behind a tap. */
+    private fun applyGuard(block: (GuardSettings) -> GuardSettings) {
+        val next = block(pendingGuard ?: viewModel.uiState.value.config.guard)
+        pendingGuard = next
+        paintRouting(next, viewModel.uiState.value.guardNeedsRestart)
+        viewModel.updateGuardSettings(next)
+    }
+
+    private fun setupRoutingEntries() {
+        binding.entryGuardLevel.setOnClickListener { showSheet(Sheet.GUARD) }
+        binding.entryReport.setOnClickListener { showSheet(Sheet.REPORT) }
+        binding.btnGuardPageBack.setOnClickListener { closeSheet() }
+        binding.btnReportPageBack.setOnClickListener { closeSheet() }
+
+        binding.rowLevelOff.setOnClickListener { applyGuard { it.copy(antiRouteLevel = AntiRouteLevel.OFF) } }
+        binding.rowLevelWire.setOnClickListener { applyGuard { it.copy(antiRouteLevel = AntiRouteLevel.WIRE) } }
+        binding.rowLevelStandard.setOnClickListener {
+            applyGuard { it.copy(antiRouteLevel = AntiRouteLevel.STANDARD) }
+        }
+        binding.rowLevelDeep.setOnClickListener { applyGuard { it.copy(antiRouteLevel = AntiRouteLevel.DEEP) } }
+
+        binding.swWireEscape.setOnClickListener { applyGuard { it.copy(wireEscape = !it.wireEscape) } }
+        binding.swScrub.setOnClickListener { applyGuard { it.copy(scrub = !it.scrub) } }
+        binding.swSplit.setOnClickListener { applyGuard { it.copy(split = !it.split) } }
+        binding.swDemotePrefill.setOnClickListener { applyGuard { it.copy(demotePrefill = !it.demotePrefill) } }
+
+        binding.segScrubScope.onChoice = { index ->
+            applyGuard {
+                it.copy(scrubScope = if (index == 0) AntiRouteScrubScope.LEADING else AntiRouteScrubScope.ALL)
+            }
+        }
+        binding.segSeparator.onChoice = { index ->
+            applyGuard {
+                it.copy(separator = if (index == 0) AntiRouteSeparator.HYPHEN else AntiRouteSeparator.WORD_JOINER)
+            }
+        }
+
+        binding.rowReportOff.setOnClickListener { applyGuard { it.copy(modelReport = ModelReportMode.OFF) } }
+        binding.rowReportHeaders.setOnClickListener {
+            applyGuard { it.copy(modelReport = ModelReportMode.HEADERS) }
+        }
+        binding.rowReportBody.setOnClickListener { applyGuard { it.copy(modelReport = ModelReportMode.BODY) } }
+        binding.rowReportBoth.setOnClickListener { applyGuard { it.copy(modelReport = ModelReportMode.BOTH) } }
+
+        binding.etReportKey.setOnFocusChangeListener { _, focused ->
+            if (!focused) commitReportKey()
+        }
+        binding.etReportKey.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId != EditorInfo.IME_ACTION_DONE) return@setOnEditorActionListener false
+            commitReportKey()
+            true
+        }
+    }
+
+    /** The field is the only free text on either page: it lands on focus loss or on 完成. */
+    private fun commitReportKey() {
+        val guard = pendingGuard ?: viewModel.uiState.value.config.guard
+        val typed = binding.etReportKey.text?.toString()?.trim().orEmpty()
+        if (typed.isEmpty()) {
+            binding.etReportKey.setText(guard.modelReportKey)
+            Toast.makeText(this, R.string.settings_report_key_invalid, Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (typed != guard.modelReportKey) applyGuard { it.copy(modelReportKey = typed) }
     }
 
 

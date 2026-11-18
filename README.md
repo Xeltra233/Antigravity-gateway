@@ -374,8 +374,8 @@ Key 的签名由 `KEY_HMAC_SECRET` 控制，持久化在 `KEY_DB_PATH`。Android
 
 | 端点 | 返回 |
 | --- | --- |
-| `GET /healthz` | `{"status":"ok","version":"2.0.1"}` |
-| `GET /readyz` | `{"status":"ready","version":"2.0.1"}` |
+| `GET /healthz` | `{"status":"ok","version":"2.1.0"}` |
+| `GET /readyz` | `{"status":"ready","version":"2.1.0"}` |
 | `GET /metrics` | Prometheus 格式 |
 
 `/metrics` 包含请求总量、活跃请求数、过载拒绝、合成包装命中/修复/重试/冲突等指标。
@@ -426,7 +426,7 @@ Helix-gateway/
 ```bash
 go build -trimpath -ldflags="-s -w" -o helix-gateway ./cmd/gateway
 ./helix-gateway --version
-# Helix Gateway version 2.0.1 (commit: ..., built: ...)
+# Helix Gateway version 2.1.0 (commit: ..., built: ...)
 ```
 
 交叉编译：
@@ -449,7 +449,7 @@ cd android && ./gradlew :app:testReleaseUnitTest
 
 # 3. 打包
 ./gradlew :app:assembleRelease
-# 产物: app/build/outputs/apk/release/helix-gateway-v2.0.1.apk
+# 产物: app/build/outputs/apk/release/helix-gateway-v2.1.0.apk
 ```
 
 改过 JNI 桥接签名后必须重新跑第 1 步，否则 `.so` 与 Kotlin 侧对不上。
@@ -472,10 +472,10 @@ cd android && ./gradlew :app:testReleaseUnitTest
 校验发布产物：
 
 ```bash
-gh release view v2.0.1
+gh release view v2.1.0
 sha256sum -c checksums.txt
 helix-gateway --version
-aapt2 dump badging helix-gateway-v2.0.1.apk | head -1
+aapt2 dump badging helix-gateway-v2.1.0.apk | head -1
 ```
 
 ---
