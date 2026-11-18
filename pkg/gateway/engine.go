@@ -1,14 +1,11 @@
 package gateway
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"io"
 	"log/slog"
 	"net/http"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -22,7 +19,7 @@ import (
 )
 
 var (
-	Version   = "2.0.0"
+	Version   = "2.0.1"
 	GitCommit = "none"
 	BuildTime = "unknown"
 )
@@ -31,11 +28,14 @@ type responseLogger struct {
 	http.ResponseWriter
 	statusCode   int
 	bytesWritten int64
-	bodyBuf      bytes.Buffer
 }
 
 func (rl *responseLogger) WriteHeader(code int) {
-	rl.statusCode = code
+	// Record only the first status: net/http ignores later calls, so the log
+	// should report what the client actually received.
+	if rl.statusCode == 0 {
+		rl.statusCode = code
+	}
 	rl.ResponseWriter.WriteHeader(code)
 }
 
@@ -44,14 +44,6 @@ func (rl *responseLogger) Write(b []byte) (int, error) {
 		rl.statusCode = http.StatusOK
 	}
 	rl.bytesWritten += int64(len(b))
-	if rl.bodyBuf.Len() < 2048 {
-		remaining := 2048 - rl.bodyBuf.Len()
-		if len(b) > remaining {
-			rl.bodyBuf.Write(b[:remaining])
-		} else {
-			rl.bodyBuf.Write(b)
-		}
-	}
 	return rl.ResponseWriter.Write(b)
 }
 
@@ -65,8 +57,11 @@ func detailedLoggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
-		w.Header().Set("Access-Control-Allow-Headers", "*")
-		w.Header().Set("Access-Control-Allow-Credentials", "true")
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Request-ID, Accept, Origin, Cache-Control")
+		w.Header().Set("Access-Control-Expose-Headers", "X-Request-ID")
+		// Access-Control-Allow-Credentials is deliberately absent: the fetch
+		// spec rejects it together with a wildcard origin, and this gateway
+		// authenticates with a bearer header rather than a cookie.
 		w.Header().Set("Access-Control-Max-Age", "86400")
 
 		if r.Method == http.MethodOptions {
@@ -75,45 +70,23 @@ func detailedLoggingMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		var reqBodyPreview string
-		if r.Body != nil && r.ContentLength != 0 {
-			buf, err := io.ReadAll(io.LimitReader(r.Body, 4096))
-			if err == nil && len(buf) > 0 {
-				reqBodyPreview = string(buf)
-				r.Body = io.NopCloser(io.MultiReader(bytes.NewReader(buf), r.Body))
-			}
-		}
-
-		authHeader := r.Header.Get("Authorization")
-		maskedAuth := ""
-		if len(authHeader) > 15 {
-			maskedAuth = authHeader[:10] + "..." + authHeader[len(authHeader)-4:]
-		} else if authHeader != "" {
-			maskedAuth = "***"
-		}
-
+		// Request and response bodies are never logged. They carry conversation
+		// content and user data, and the redacting handler cannot catch them
+		// because the payload sits in one string value rather than a named
+		// credential field.
 		slog.Info(">>> INCOMING HTTP REQUEST",
 			"method", r.Method,
 			"path", r.URL.Path,
-			"query", r.URL.RawQuery,
+			"query", logger.RedactQuery(r.URL.RawQuery),
 			"remote", r.RemoteAddr,
 			"content_type", r.Header.Get("Content-Type"),
-			"auth", maskedAuth,
-			"body_preview", strings.ReplaceAll(strings.ReplaceAll(reqBodyPreview, "\n", " "), "\r", " "),
+			"content_length", r.ContentLength,
 		)
 
 		start := time.Now()
-		rl := &responseLogger{
-			ResponseWriter: w,
-			statusCode:     0,
-		}
+		rl := &responseLogger{ResponseWriter: w}
 
 		next.ServeHTTP(rl, r)
-
-		respPreview := strings.TrimSpace(rl.bodyBuf.String())
-		if len(respPreview) > 500 {
-			respPreview = respPreview[:500] + "...(truncated)"
-		}
 
 		slog.Info("<<< OUTGOING HTTP RESPONSE",
 			"method", r.Method,
@@ -121,7 +94,6 @@ func detailedLoggingMiddleware(next http.Handler) http.Handler {
 			"status", rl.statusCode,
 			"bytes", rl.bytesWritten,
 			"duration_ms", time.Since(start).Milliseconds(),
-			"resp_preview", strings.ReplaceAll(strings.ReplaceAll(respPreview, "\n", " "), "\r", " "),
 		)
 	})
 }
@@ -192,6 +164,14 @@ func StartEngine(getenv func(string) string) (*Engine, error) {
 		keyMgr.Close()
 		return nil, fmt.Errorf("failed to start server listener on port %d: %w", cfg.Port, err)
 	}
+
+	// A Serve error after the listener is up would otherwise only reach a log
+	// line, so surface it through the server's channel as well.
+	go func() {
+		if serveErr, ok := <-srv.ServeErr(); ok && serveErr != nil {
+			slog.Error("http server stopped unexpectedly", "err", serveErr)
+		}
+	}()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	engine := &Engine{

@@ -100,7 +100,7 @@ func (c *UpstreamClient) fingerprintHeader(pool []string) string {
 	return pool[int(b[0])%len(pool)]
 }
 
-func (c *UpstreamClient) NewUpstreamRequest(ctx context.Context, method, targetURL string, body io.Reader, reqID string) (*http.Request, error) {
+func (c *UpstreamClient) NewUpstreamRequest(ctx context.Context, method, targetURL string, body io.Reader, reqID string, streaming bool) (*http.Request, error) {
 	req, err := http.NewRequestWithContext(ctx, method, targetURL, body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create upstream request: %w", err)
@@ -108,7 +108,13 @@ func (c *UpstreamClient) NewUpstreamRequest(ctx context.Context, method, targetU
 
 	// Standard content type plus a rotated client fingerprint.
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", c.fingerprintHeader(upstreamAcceptHeaders))
+	accept := c.fingerprintHeader(upstreamAcceptHeaders)
+	if streaming {
+		// A streaming request has to advertise SSE, otherwise an upstream may
+		// answer with one JSON document instead of an event stream.
+		accept = "text/event-stream"
+	}
+	req.Header.Set("Accept", accept)
 	req.Header.Set("User-Agent", c.fingerprintHeader(upstreamUserAgents))
 	// Upstream authentication - NEVER forward downstream auth
 	if c.cfg.UpstreamAuthMode == "bearer" && c.cfg.UpstreamAPIKey != "" {
@@ -140,7 +146,7 @@ func (c *UpstreamClient) GetModels(ctx context.Context, reqID string) ([]byte, e
 	}
 	c.modelsCacheMu.RUnlock()
 
-	req, err := c.NewUpstreamRequest(ctx, http.MethodGet, c.cfg.UpstreamModelsURL(), nil, reqID)
+	req, err := c.NewUpstreamRequest(ctx, http.MethodGet, c.cfg.UpstreamModelsURL(), nil, reqID, false)
 	if err != nil {
 		return nil, err
 	}

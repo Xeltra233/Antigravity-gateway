@@ -18,8 +18,8 @@ import (
 type Server struct {
 	cfg        *config.Config
 	httpServer *http.Server
-	mux        *http.ServeMux
 	listener   net.Listener
+	serveErr   chan error
 }
 
 func New(cfg *config.Config, handler http.Handler) *Server {
@@ -42,14 +42,25 @@ func (s *Server) Start() error {
 		return err
 	}
 	s.listener = ln
+	s.serveErr = make(chan error, 1)
 	slog.Info("server listening", "addr", ln.Addr().String())
 
 	go func() {
-		if err := s.httpServer.Serve(ln); err != nil && err != http.ErrServerClosed {
+		err := s.httpServer.Serve(ln)
+		if err != nil && err != http.ErrServerClosed {
 			slog.Error("server error", "err", err)
+			s.serveErr <- err
 		}
+		close(s.serveErr)
 	}()
 	return nil
+}
+
+// ServeErr reports the error that stopped the listener. The channel is closed
+// once Serve returns, so a receive with ok==false means a clean shutdown. It is
+// nil before Start has been called.
+func (s *Server) ServeErr() <-chan error {
+	return s.serveErr
 }
 
 func (s *Server) Addr() string {

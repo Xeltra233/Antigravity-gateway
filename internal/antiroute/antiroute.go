@@ -90,10 +90,9 @@ func DefaultOptions(l Level) Options {
 // Guard holds the immutable rule table plus the resolved options and is safe
 // for concurrent use: per-request state lives in Session.
 type Guard struct {
-	opts      Options
-	rules     *RuleSet
-	sep       string
-	maxMasked int
+	opts  Options
+	rules *RuleSet
+	sep   string
 }
 
 // New builds a Guard from opts.
@@ -120,15 +119,6 @@ func New(opts Options) (*Guard, error) {
 		return nil, err
 	}
 	g.rules = rules
-	if opts.Split {
-		for _, r := range rules.Split {
-			rs := []rune(r.Term)
-			masked := string(rs[:len(rs)/2]) + sep + string(rs[len(rs)/2:])
-			if n := len([]byte(masked)); n > g.maxMasked {
-				g.maxMasked = n
-			}
-		}
-	}
 	return g, nil
 }
 
@@ -324,6 +314,7 @@ func (s *Session) rewriteText(text string, instructionBlock bool) (string, int) 
 			}
 			next := r.re.ReplaceAllString(out, r.replace)
 			if next != out {
+				s.record(pair{}, 1, true)
 				out = next
 				count++
 			}
@@ -399,8 +390,12 @@ func (s *Session) RestoreString(v string) string {
 	if s == nil || v == "" {
 		return v
 	}
+	// Copy under the lock. Handing the live slice to a loop outside it races with
+	// record(), which appends and then re-sorts the same backing array in place:
+	// the reader can observe a half-sorted snapshot.
 	s.mu.Lock()
-	pairs := s.pairs
+	pairs := make([]pair, len(s.pairs))
+	copy(pairs, s.pairs)
 	s.mu.Unlock()
 	out := v
 	for _, p := range pairs {
@@ -417,7 +412,8 @@ func (s *Session) RestoreBytes(b []byte) []byte {
 		return b
 	}
 	s.mu.Lock()
-	pairs := s.pairs
+	pairs := make([]pair, len(s.pairs))
+	copy(pairs, s.pairs)
 	s.mu.Unlock()
 	if len(pairs) == 0 {
 		return b

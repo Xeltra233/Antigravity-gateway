@@ -42,7 +42,11 @@ func GetKeyInfo(ctx context.Context) *keymgmt.KeyInfo {
 	if val == nil {
 		return nil
 	}
-	return val.(*keymgmt.KeyInfo)
+	info, ok := val.(*keymgmt.KeyInfo)
+	if !ok {
+		return nil
+	}
+	return info
 }
 
 func GetRequestID(ctx context.Context) string {
@@ -50,7 +54,11 @@ func GetRequestID(ctx context.Context) string {
 	if val == nil {
 		return ""
 	}
-	return val.(string)
+	id, ok := val.(string)
+	if !ok {
+		return ""
+	}
+	return id
 }
 
 type ProxyHandler struct {
@@ -157,7 +165,7 @@ func (h *ProxyHandler) HandleGenericPassthrough(w http.ResponseWriter, r *http.R
 		targetURL += "?" + r.URL.RawQuery
 	}
 
-	upstreamReq, err := h.client.NewUpstreamRequest(r.Context(), r.Method, targetURL, bytes.NewReader(bodyBytes), reqID)
+	upstreamReq, err := h.client.NewUpstreamRequest(r.Context(), r.Method, targetURL, bytes.NewReader(bodyBytes), reqID, false)
 	if err != nil {
 		server.WriteError(w, http.StatusInternalServerError, "Failed to create upstream request: "+err.Error(), "api_error", "internal_error")
 		return
@@ -184,7 +192,13 @@ func (h *ProxyHandler) HandleGenericPassthrough(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// Relay end-to-end headers only. Hop-by-hop headers describe the upstream
+	// connection and must not be forwarded to the downstream client.
+	connectionTokens := connectionHeaderTokens(resp.Header)
 	for k, vv := range resp.Header {
+		if isHopByHopHeader(k) || connectionTokens[strings.ToLower(k)] {
+			continue
+		}
 		for _, v := range vv {
 			w.Header().Add(k, v)
 		}
@@ -202,4 +216,43 @@ func (h *ProxyHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("POST /v1/chat/completions", auth(h.HandleChat))
 	// Fallback catch-all for any other /v1/ endpoint
 	mux.Handle("/v1/", auth(h.HandleGenericPassthrough))
+}
+
+// hopByHopHeaders are connection-scoped and must not be relayed by a proxy
+// (RFC 7230 section 6.1).
+var hopByHopHeaders = map[string]struct{}{
+	"connection":          {},
+	"proxy-connection":    {},
+	"keep-alive":          {},
+	"proxy-authenticate":  {},
+	"proxy-authorization": {},
+	"te":                  {},
+	"trailer":             {},
+	"transfer-encoding":   {},
+	"upgrade":             {},
+}
+
+func isHopByHopHeader(name string) bool {
+	_, ok := hopByHopHeaders[strings.ToLower(name)]
+	return ok
+}
+
+// connectionHeaderTokens returns the field names listed in the Connection
+// header, which are hop-by-hop for this particular message. A nil result is
+// safe to read from.
+func connectionHeaderTokens(h http.Header) map[string]bool {
+	var tokens map[string]bool
+	for _, value := range h.Values("Connection") {
+		for _, token := range strings.Split(value, ",") {
+			name := strings.ToLower(strings.TrimSpace(token))
+			if name == "" {
+				continue
+			}
+			if tokens == nil {
+				tokens = make(map[string]bool)
+			}
+			tokens[name] = true
+		}
+	}
+	return tokens
 }

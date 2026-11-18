@@ -222,7 +222,7 @@ func (o *Orchestrator) handleNonStreaming(w http.ResponseWriter, ctx context.Con
 		// global timeout, so the body read has to be bounded here.
 		attemptCtx, attemptCancel := context.WithTimeout(ctx, o.cfg.UpstreamTimeout)
 
-		upstreamReq, err := o.client.NewUpstreamRequest(attemptCtx, http.MethodPost, o.cfg.UpstreamChatURL(), bytes.NewReader(injected.TransformedBody), currentReqID)
+		upstreamReq, err := o.client.NewUpstreamRequest(attemptCtx, http.MethodPost, o.cfg.UpstreamChatURL(), bytes.NewReader(injected.TransformedBody), currentReqID, false)
 		if err != nil {
 			attemptCancel()
 			server.WriteError(w, http.StatusInternalServerError, "Failed to create upstream request", "api_error", "internal_error")
@@ -282,7 +282,7 @@ func (o *Orchestrator) handleNonStreaming(w http.ResponseWriter, ctx context.Con
 	if normErr != nil {
 		// If decode failed and policy allows format retry
 		if o.cfg.RecoveryPolicy == "repair_then_retry" && stats != nil && stats.RealToolCallCount == 0 && ctx.Err() == nil {
-			retryNormalized, retryHeader, retryErr := o.attemptSingleFormatRetry(ctx, originalBody, reqID, ex)
+			retryNormalized, retryHeader, retryErr := o.attemptSingleFormatRetry(ctx, originalBody, reqID)
 			if retryErr == nil {
 				metrics.Default.SyntheticRetries.Add(1)
 				ex.info = ex.info.WithResponse(retryHeader, retryNormalized)
@@ -325,7 +325,7 @@ func (o *Orchestrator) handleNonStreaming(w http.ResponseWriter, ctx context.Con
 	_, _ = w.Write(normalized)
 }
 
-func (o *Orchestrator) attemptSingleFormatRetry(ctx context.Context, originalBody []byte, reqID string, ex *exchange) ([]byte, http.Header, error) {
+func (o *Orchestrator) attemptSingleFormatRetry(ctx context.Context, originalBody []byte, reqID string) ([]byte, http.Header, error) {
 	// Prepare retry injection with error correction message
 	var bodyMap map[string]any
 	if err := json.Unmarshal(originalBody, &bodyMap); err != nil {
@@ -370,15 +370,23 @@ func (o *Orchestrator) attemptSingleFormatRetry(ctx context.Context, originalBod
 	if err != nil {
 		return nil, nil, err
 	}
-	if guardedRetry, gErr := o.protect(ex, retryBody); gErr == nil {
-		retryBody = guardedRetry
+	// The retry is a whole second request, so it gets its own guard session:
+	// substitutions recorded for the first attempt must not rewrite this reply.
+	var retryGuard *antiroute.Session
+	if o.antiRoute != nil && o.antiRoute.Enabled() {
+		retryGuard = o.antiRoute.NewSession()
+	}
+	if retryGuard != nil {
+		if guardedRetry, gErr := retryGuard.Protect(retryBody, o.encodeShaped); gErr == nil {
+			retryBody = guardedRetry
+		}
 	}
 
 	// The format retry is a whole second request; bound it the same way.
 	retryCtx, retryCancel := context.WithTimeout(ctx, o.cfg.UpstreamTimeout)
 	defer retryCancel()
 
-	retryReq, err := o.client.NewUpstreamRequest(retryCtx, http.MethodPost, o.cfg.UpstreamChatURL(), bytes.NewReader(retryBody), reqID+"_format_retry")
+	retryReq, err := o.client.NewUpstreamRequest(retryCtx, http.MethodPost, o.cfg.UpstreamChatURL(), bytes.NewReader(retryBody), reqID+"_format_retry", false)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -402,8 +410,8 @@ func (o *Orchestrator) attemptSingleFormatRetry(ctx context.Context, originalBod
 	if err != nil {
 		return nil, nil, err
 	}
-	if ex != nil && ex.guard != nil {
-		normalized = ex.guard.RestoreBytes(normalized)
+	if retryGuard != nil {
+		normalized = retryGuard.RestoreBytes(normalized)
 	}
 
 	return normalized, resp.Header, nil
@@ -422,7 +430,7 @@ func peekStream(r io.Reader) ([]byte, error) {
 }
 func (o *Orchestrator) handleStreaming(w http.ResponseWriter, ctx context.Context, injected *synthetic.InjectedRequest, ex *exchange) {
 	reqID := ex.reqID
-	upstreamReq, err := o.client.NewUpstreamRequest(ctx, http.MethodPost, o.cfg.UpstreamChatURL(), bytes.NewReader(injected.TransformedBody), reqID)
+	upstreamReq, err := o.client.NewUpstreamRequest(ctx, http.MethodPost, o.cfg.UpstreamChatURL(), bytes.NewReader(injected.TransformedBody), reqID, true)
 	if err != nil {
 		server.WriteError(w, http.StatusInternalServerError, "Failed to create upstream request", "api_error", "internal_error")
 		return
@@ -614,30 +622,73 @@ func isResponseEmpty(respBody []byte) bool {
 	}
 	var resp map[string]any
 	if err := json.Unmarshal(respBody, &resp); err != nil {
+		// A non-JSON body is not something a retry can improve on.
 		return false
 	}
-	choices, ok := resp["choices"].([]any)
-	if !ok || len(choices) == 0 {
+	// A 200 carrying an error object has produced content. Retrying the same
+	// request cannot turn it into a completion, so do not spend the budget.
+	if _, ok := resp["error"]; ok {
+		return false
+	}
+	if choices, ok := resp["choices"].([]any); ok && len(choices) > 0 {
+		for _, c := range choices {
+			cMap, ok := c.(map[string]any)
+			if !ok {
+				continue
+			}
+			msg, ok := cMap["message"].(map[string]any)
+			if !ok {
+				continue
+			}
+			if messageHasContent(msg) {
+				return false
+			}
+		}
 		return true
 	}
-	for _, c := range choices {
-		cMap, ok := c.(map[string]any)
-		if !ok {
-			continue
+	// Gemini-style payloads carry candidates instead of choices.
+	if candidates, ok := resp["candidates"].([]any); ok && len(candidates) > 0 {
+		for _, c := range candidates {
+			cMap, ok := c.(map[string]any)
+			if !ok {
+				continue
+			}
+			content, ok := cMap["content"].(map[string]any)
+			if !ok {
+				continue
+			}
+			parts, ok := content["parts"].([]any)
+			if !ok {
+				continue
+			}
+			for _, p := range parts {
+				pMap, ok := p.(map[string]any)
+				if !ok {
+					continue
+				}
+				if text, ok := pMap["text"].(string); ok && strings.TrimSpace(text) != "" {
+					return false
+				}
+			}
 		}
-		msg, ok := cMap["message"].(map[string]any)
-		if !ok {
-			continue
-		}
-		content, _ := msg["content"].(string)
-		if strings.TrimSpace(content) != "" {
-			return false
-		}
-		if tcList, ok := msg["tool_calls"].([]any); ok && len(tcList) > 0 {
-			return false
-		}
+		return true
 	}
 	return true
+}
+
+// messageHasContent reports whether an assistant message carries anything a
+// client can use: text, reasoning, or a tool call.
+func messageHasContent(msg map[string]any) bool {
+	if content, ok := msg["content"].(string); ok && strings.TrimSpace(content) != "" {
+		return true
+	}
+	if reasoning, ok := msg["reasoning_content"].(string); ok && strings.TrimSpace(reasoning) != "" {
+		return true
+	}
+	if tcList, ok := msg["tool_calls"].([]any); ok && len(tcList) > 0 {
+		return true
+	}
+	return false
 }
 
 // activityReader restarts the upstream idle deadline every time bytes arrive, so

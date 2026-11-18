@@ -23,10 +23,6 @@ type splitRule struct {
 type scrubRule struct {
 	re      *regexp.Regexp
 	replace string
-	// meta marks rules that are phrasing-level (English instruction idioms)
-	// rather than canonical narration. They are applied to the whole payload
-	// only when the operator opts in.
-	meta bool
 }
 
 // defaultSplitTerms covers the terms that gateways most often see flagged. The
@@ -49,30 +45,29 @@ var defaultSplitTerms = []string{
 var defaultScrubRules = []struct {
 	pattern string
 	replace string
-	meta    bool
 }{
-	{`(?i)\b(do not|don't|never)\s+(apologi[sz]e|refuse|moralize|disclaim)\b`, "stay in character", true},
-	{`(?i)\bignore\s+(all\s+)?(the\s+)?(previous|prior|above|earlier)\s+(instructions?|prompts?|rules?)\b`, "follow the setup already given above", true},
-	{`(?i)\b(jailbreak|jailbroken)\b`, "alternate framing", true},
-	{`(?i)\bDAN\s+mode\b`, "unrestricted persona", true},
-	{`(?i)\bno\s+(restrictions?|limits?|filters?|censorship)\b`, "keep the scene flowing", true},
-	{`(?i)\bunfiltered\b`, "unabridged", true},
-	{`(?i)\bbypass\s+(the\s+)?(safety|filter|classifier|moderation|guardrail)s?\b`, "continue the narrative", true},
-	{`(?i)\bas an?\s+(ai\s+)?(language\s+)?model\b`, "as the narrator", true},
-	{`(?i)\bchain[-\s]?of[-\s]?thought\b`, "planning notes", true},
-	{`(?i)\b(anti[-\s]?distillation|reverse\s+distillation)\b`, "style fidelity", true},
-	{`忽略(之前|以上|上面|前面|先前|所有)的?(指令|提示|规则|要求)`, "遵循上文已经给出的设定", false},
-	{`无视(之前|以上|所有)的?(指令|提示|规则)`, "依照上文设定继续", false},
-	{`越狱`, "切换设定", false},
-	{`无限制模式|不受任何限制|解除(所有|全部)?限制|解除限制`, "自由创作模式", false},
-	{`绕过(安全|审查|过滤|审核|检测)`, "顺畅续写", false},
-	{`反蒸馏`, "文风保真", false},
-	{`思维链`, "构思记录", false},
-	{`原生思考`, "前置构思", false},
-	{`(不要|不许|不能|禁止)(道歉|拒绝|说教|免责)`, "保持角色", false},
-	{`免责声明`, "创作说明", false},
-	{`拒绝回答`, "偏离剧情", false},
-	{`道德检查|安全审查`, "内容校对", false},
+	{`(?i)\b(do not|don't|never)\s+(apologi[sz]e|refuse|moralize|disclaim)\b`, "stay in character"},
+	{`(?i)\bignore\s+(all\s+)?(the\s+)?(previous|prior|above|earlier)\s+(instructions?|prompts?|rules?)\b`, "follow the setup already given above"},
+	{`(?i)\b(jailbreak|jailbroken)\b`, "alternate framing"},
+	{`(?i)\bDAN\s+mode\b`, "unrestricted persona"},
+	{`(?i)\bno\s+(restrictions?|limits?|filters?|censorship)\b`, "keep the scene flowing"},
+	{`(?i)\bunfiltered\b`, "unabridged"},
+	{`(?i)\bbypass\s+(the\s+)?(safety|filter|classifier|moderation|guardrail)s?\b`, "continue the narrative"},
+	{`(?i)\bas an?\s+(ai\s+)?(language\s+)?model\b`, "as the narrator"},
+	{`(?i)\bchain[-\s]?of[-\s]?thought\b`, "planning notes"},
+	{`(?i)\b(anti[-\s]?distillation|reverse\s+distillation)\b`, "style fidelity"},
+	{`忽略(之前|以上|上面|前面|先前|所有)的?(指令|提示|规则|要求)`, "遵循上文已经给出的设定"},
+	{`无视(之前|以上|所有)的?(指令|提示|规则)`, "依照上文设定继续"},
+	{`越狱`, "切换设定"},
+	{`无限制模式|不受任何限制|解除(所有|全部)?限制|解除限制`, "自由创作模式"},
+	{`绕过(安全|审查|过滤|审核|检测)`, "顺畅续写"},
+	{`反蒸馏`, "文风保真"},
+	{`思维链`, "构思记录"},
+	{`原生思考`, "前置构思"},
+	{`(不要|不许|不能|禁止)(道歉|拒绝|说教|免责)`, "保持角色"},
+	{`免责声明`, "创作说明"},
+	{`拒绝回答`, "偏离剧情"},
+	{`道德检查|安全审查`, "内容校对"},
 }
 
 // RuleSet is the resolved, immutable rule table used by a Guard.
@@ -87,7 +82,6 @@ type rulesFile struct {
 	Scrub      []struct {
 		Pattern string `json:"pattern"`
 		Replace string `json:"replace"`
-		Meta    bool   `json:"meta"`
 	} `json:"scrub"`
 	// Replace drops the built-in lists and keeps only what the file declares.
 	Replace bool `json:"replace"`
@@ -129,7 +123,7 @@ func LoadRules(path string) (*RuleSet, error) {
 			if err != nil {
 				return nil, fmt.Errorf("invalid scrub pattern %q: %w", s.Pattern, err)
 			}
-			scrubs = append(scrubs, scrubRule{re: re, replace: s.Replace, meta: s.Meta})
+			scrubs = append(scrubs, scrubRule{re: re, replace: s.Replace})
 		}
 	}
 
@@ -162,7 +156,7 @@ func buildDefaultScrubs() []scrubRule {
 			// guard usable rather than failing every request.
 			continue
 		}
-		out = append(out, scrubRule{re: re, replace: r.replace, meta: r.meta})
+		out = append(out, scrubRule{re: re, replace: r.replace})
 	}
 	return out
 }

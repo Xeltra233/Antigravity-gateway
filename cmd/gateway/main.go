@@ -18,7 +18,7 @@ import (
 )
 
 var (
-	Version   = "2.0.0"
+	Version   = "2.0.1"
 	GitCommit = "none"
 	BuildTime = "unknown"
 )
@@ -66,21 +66,16 @@ func detailedLoggingMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		authHeader := r.Header.Get("Authorization")
-		maskedAuth := ""
-		if len(authHeader) > 15 {
-			maskedAuth = authHeader[:10] + "..." + authHeader[len(authHeader)-4:]
-		} else if authHeader != "" {
-			maskedAuth = "***"
-		}
-
+		// The bearer token is never logged, not even truncated: a prefix is still a
+		// credential. The query string can carry a key too, so it goes through the
+		// redacting helper instead of being written raw.
 		slog.Info(">>> INCOMING HTTP REQUEST",
 			"method", r.Method,
 			"path", r.URL.Path,
-			"query", r.URL.RawQuery,
+			"query", logger.RedactQuery(r.URL.RawQuery),
 			"remote", r.RemoteAddr,
 			"content_type", r.Header.Get("Content-Type"),
-			"auth", maskedAuth,
+			"content_length", r.ContentLength,
 		)
 
 		start := time.Now()

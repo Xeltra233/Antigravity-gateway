@@ -10,10 +10,16 @@ import (
 var (
 	ErrGlobalLimitExceeded = errors.New("global concurrent request limit exceeded")
 	ErrKeyLimitExceeded    = errors.New("per-key concurrent request limit exceeded")
+
+	errQueueTimeout = errors.New("queue timeout")
 )
 
 type keyLimiter struct {
 	sem chan struct{}
+	// refs counts the requests that hold or wait on this limiter. The entry is
+	// dropped from the map once the count returns to zero, so keys created and
+	// revoked repeatedly do not accumulate here forever.
+	refs int
 }
 
 type ConcurrencyLimiter struct {
@@ -40,80 +46,105 @@ func NewConcurrencyLimiter(maxGlobal int, maxPerKey int, queueTimeout time.Durat
 	}
 }
 
+// getKeyLimiter returns the limiter for keyID and takes one reference on it.
+// Every returned limiter must be handed back with dropKeyLimiter.
 func (l *ConcurrencyLimiter) getKeyLimiter(keyID string) *keyLimiter {
 	l.keyLimitersMu.Lock()
 	defer l.keyLimitersMu.Unlock()
 
 	kl, exists := l.keyLimiters[keyID]
 	if !exists {
-		kl = &keyLimiter{
-			sem: make(chan struct{}, l.perKeyLimit),
-		}
+		kl = &keyLimiter{sem: make(chan struct{}, l.perKeyLimit)}
 		l.keyLimiters[keyID] = kl
 	}
+	kl.refs++
 	return kl
 }
 
+func (l *ConcurrencyLimiter) dropKeyLimiter(keyID string, kl *keyLimiter) {
+	l.keyLimitersMu.Lock()
+	defer l.keyLimitersMu.Unlock()
+
+	kl.refs--
+	if kl.refs > 0 {
+		return
+	}
+	if current, ok := l.keyLimiters[keyID]; ok && current == kl {
+		delete(l.keyLimiters, keyID)
+	}
+}
+
+// KeyLimiterCount reports how many per-key limiters are currently tracked.
+func (l *ConcurrencyLimiter) KeyLimiterCount() int {
+	l.keyLimitersMu.Lock()
+	defer l.keyLimitersMu.Unlock()
+	return len(l.keyLimiters)
+}
+
+// waitSem takes one slot from sem, honouring the queue timeout and the caller's
+// context. It reports errQueueTimeout when the timeout elapses first.
+func (l *ConcurrencyLimiter) waitSem(ctx context.Context, sem chan struct{}) error {
+	select {
+	case sem <- struct{}{}:
+		return nil
+	default:
+	}
+
+	if l.queueTimeout <= 0 {
+		return errQueueTimeout
+	}
+	timer := time.NewTimer(l.queueTimeout)
+	defer timer.Stop()
+	select {
+	case sem <- struct{}{}:
+		return nil
+	case <-timer.C:
+		return errQueueTimeout
+	case <-ctx.Done():
+		return ctx.Err()
+	}
+}
+
 func (l *ConcurrencyLimiter) Acquire(ctx context.Context, keyID string) (func(), error) {
-	// Step 1: Acquire per-key limit first
-	var kl *keyLimiter
+	// Step 1: take the per-key slot.
+	var (
+		kl      *keyLimiter
+		haveKey bool
+	)
 	if keyID != "" {
 		kl = l.getKeyLimiter(keyID)
-		select {
-		case kl.sem <- struct{}{}:
-			// Acquired immediately
-		default:
-			timeout := l.queueTimeout
-			if timeout <= 0 {
+		haveKey = true
+		if err := l.waitSem(ctx, kl.sem); err != nil {
+			l.dropKeyLimiter(keyID, kl)
+			if errors.Is(err, errQueueTimeout) {
 				return nil, ErrKeyLimitExceeded
 			}
-			timer := time.NewTimer(timeout)
-			defer timer.Stop()
-			select {
-			case kl.sem <- struct{}{}:
-			case <-timer.C:
-				return nil, ErrKeyLimitExceeded
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			}
+			return nil, err
 		}
 	}
 
-	// Step 2: Acquire global limit
-	select {
-	case l.globalSem <- struct{}{}:
-		// Acquired immediately
-	default:
-		timeout := l.queueTimeout
-		if timeout <= 0 {
-			if kl != nil {
-				<-kl.sem
-			}
-			return nil, ErrGlobalLimitExceeded
-		}
-		globalTimer := time.NewTimer(timeout)
-		defer globalTimer.Stop()
-		select {
-		case l.globalSem <- struct{}{}:
-		case <-globalTimer.C:
-			if kl != nil {
-				<-kl.sem
-			}
-			return nil, ErrGlobalLimitExceeded
-		case <-ctx.Done():
-			if kl != nil {
-				<-kl.sem
-			}
-			return nil, ctx.Err()
-		}
-	}
-
-	release := func() {
-		<-l.globalSem
-		if kl != nil {
+	// Step 2: take the global slot, handing the per-key slot back on failure.
+	if err := l.waitSem(ctx, l.globalSem); err != nil {
+		if haveKey {
 			<-kl.sem
+			l.dropKeyLimiter(keyID, kl)
 		}
+		if errors.Is(err, errQueueTimeout) {
+			return nil, ErrGlobalLimitExceeded
+		}
+		return nil, err
 	}
 
+	// Releasing twice would drain another request's slot, so make it idempotent.
+	var once sync.Once
+	release := func() {
+		once.Do(func() {
+			<-l.globalSem
+			if haveKey {
+				<-kl.sem
+				l.dropKeyLimiter(keyID, kl)
+			}
+		})
+	}
 	return release, nil
 }
